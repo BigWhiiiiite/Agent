@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 .env
 embedding_cache.json
+vector_index.json

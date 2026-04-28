@@ -10,6 +10,7 @@ MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-5-mini")
 EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
 DOCS_DIR = Path(__file__).parent / "docs"
 EMBEDDING_CACHE_PATH = Path(__file__).parent / "embedding_cache.json"
+VECTOR_INDEX_PATH = Path(__file__).parent / "vector_index.json"
 TOP_K = 3
 
 
@@ -26,6 +27,20 @@ EMBEDDING_CACHE = load_embedding_cache()
 def save_embedding_cache() -> None:
     EMBEDDING_CACHE_PATH.write_text(
         json.dumps(EMBEDDING_CACHE, ensure_ascii=False),
+        encoding="utf-8"
+    )
+
+
+def load_vector_index() -> dict:
+    if not VECTOR_INDEX_PATH.exists():
+        return {}
+
+    return json.loads(VECTOR_INDEX_PATH.read_text(encoding="utf-8"))
+
+
+def save_vector_index(index: dict) -> None:
+    VECTOR_INDEX_PATH.write_text(
+        json.dumps(index, ensure_ascii=False),
         encoding="utf-8"
     )
 
@@ -174,13 +189,16 @@ def cosine_similarity(vector_a: list, vector_b: list) -> float:
 
 def semantic_search_knowledge_base(query: str) -> dict:
     query_embedding = get_embedding(query)
+    vector_index = get_vector_index()
     results = []
 
-    for chunk in load_knowledge_chunks():
-        chunk_embedding = get_embedding(chunk["content"])
+    for chunk in vector_index["chunks"]:
+        chunk_embedding = chunk["embedding"]
         similarity = cosine_similarity(query_embedding, chunk_embedding)
         results.append({
-            **chunk,
+            "source": chunk["source"],
+            "chunk_id": chunk["chunk_id"],
+            "content": chunk["content"],
             "similarity": round(similarity, 4)
         })
 
@@ -189,9 +207,50 @@ def semantic_search_knowledge_base(query: str) -> dict:
     return {
         "query": query,
         "embedding_model": EMBEDDING_MODEL,
+        "index_path": VECTOR_INDEX_PATH.name,
         "top_k": TOP_K,
         "results": results[:TOP_K]
     }
+
+
+def build_vector_index() -> dict:
+    chunks = []
+
+    for chunk in load_knowledge_chunks():
+        chunks.append({
+            **chunk,
+            "embedding": get_embedding(chunk["content"])
+        })
+
+    index = {
+        "embedding_model": EMBEDDING_MODEL,
+        "chunks": chunks
+    }
+    save_vector_index(index)
+    return index
+
+
+def get_vector_index() -> dict:
+    index = load_vector_index()
+    current_chunks = load_knowledge_chunks()
+    indexed_chunks = index.get("chunks", [])
+
+    current_signature = [
+        (chunk["source"], chunk["chunk_id"], chunk["content"])
+        for chunk in current_chunks
+    ]
+    indexed_signature = [
+        (chunk["source"], chunk["chunk_id"], chunk["content"])
+        for chunk in indexed_chunks
+    ]
+
+    if (
+        index.get("embedding_model") != EMBEDDING_MODEL
+        or current_signature != indexed_signature
+    ):
+        return build_vector_index()
+
+    return index
 
 
 TOOL_SCHEMA = {

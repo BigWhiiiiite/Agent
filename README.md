@@ -20,6 +20,7 @@
 - 关键词 RAG
 - 文档 chunk 切块
 - embedding 语义检索 RAG
+- 本地 vector index 缓存
 
 ## 文件结构
 
@@ -36,6 +37,15 @@
 `main.py` 是主程序。
 
 `docs/` 是本地知识库，RAG 工具会从这里检索资料。
+
+程序运行过程中可能生成：
+
+```text
+embedding_cache.json
+vector_index.json
+```
+
+这两个文件是本地缓存，已经放进 `.gitignore`，不会提交到 GitHub。
 
 ## 安装依赖
 
@@ -128,7 +138,7 @@ embedding 语义检索本地知识库。
 
 ```text
 把用户问题转成 embedding
--> 把每个 chunk 转成 embedding
+-> 读取或构建本地 vector_index.json
 -> 计算余弦相似度
 -> 取最相近的 3 个 chunks
 -> 交给模型回答
@@ -158,7 +168,7 @@ embedding 语义检索本地知识库。
 ```text
 用户问题
 -> embedding
--> chunk embedding
+-> 本地 vector index 中的 chunk embedding
 -> cosine similarity
 -> 按语义相似度排序
 ```
@@ -166,6 +176,40 @@ embedding 语义检索本地知识库。
 两种方式都会返回 `TOP_K = 3` 个 chunk。
 
 也就是说，不是把整个知识库都发给模型，而是只把最相关的 3 个片段放回 `messages`。
+
+## 本地 Vector Index
+
+`vector_index.json` 是这个项目里的最小向量索引。
+
+它保存的是：
+
+```text
+chunk source
+chunk_id
+chunk content
+chunk embedding
+```
+
+语义检索时，不需要每次重新给所有 chunk 生成 embedding。程序会：
+
+```text
+检查 vector_index.json 是否存在
+-> 检查 embedding 模型和当前 docs chunks 是否匹配
+-> 如果匹配，直接复用索引
+-> 如果不匹配，重新构建索引
+```
+
+这可以理解成一个非常简化的向量数据库。
+
+真正的向量数据库会继续解决：
+
+```text
+大量向量存储
+快速相似度检索
+metadata 过滤
+增量更新
+并发访问
+```
 
 ## Agent Loop
 
@@ -195,7 +239,6 @@ while True:
 
 下一步可以继续做：
 
-- 把 embedding 缓存保存到本地文件
 - 接入真正的向量数据库
 - 增加工具错误处理
 - 增加测试用例
