@@ -9,8 +9,25 @@ from openai import OpenAI
 MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-5-mini")
 EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
 DOCS_DIR = Path(__file__).parent / "docs"
+EMBEDDING_CACHE_PATH = Path(__file__).parent / "embedding_cache.json"
 TOP_K = 3
-EMBEDDING_CACHE = {}
+
+
+def load_embedding_cache() -> dict:
+    if not EMBEDDING_CACHE_PATH.exists():
+        return {}
+
+    return json.loads(EMBEDDING_CACHE_PATH.read_text(encoding="utf-8"))
+
+
+EMBEDDING_CACHE = load_embedding_cache()
+
+
+def save_embedding_cache() -> None:
+    EMBEDDING_CACHE_PATH.write_text(
+        json.dumps(EMBEDDING_CACHE, ensure_ascii=False),
+        encoding="utf-8"
+    )
 
 
 def query_teacher_schedule(teacher_name: str, date: str) -> dict:
@@ -140,6 +157,7 @@ def get_embedding(text: str) -> list:
     )
     embedding = response.data[0].embedding
     EMBEDDING_CACHE[text] = embedding
+    save_embedding_cache()
     return embedding
 
 
