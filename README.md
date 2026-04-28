@@ -21,6 +21,9 @@
 - 文档 chunk 切块
 - embedding 语义检索 RAG
 - 本地 vector index 缓存
+- 工具错误处理
+- Agent 最大轮数保护
+- 调试 trace
 
 ## 文件结构
 
@@ -78,6 +81,7 @@ text-embedding-3-small
 ```bash
 export OPENAI_MODEL="gpt-5-mini"
 export OPENAI_EMBEDDING_MODEL="text-embedding-3-small"
+export MIN_SEMANTIC_SIMILARITY="0.2"
 ```
 
 ## 运行
@@ -140,6 +144,7 @@ embedding 语义检索本地知识库。
 把用户问题转成 embedding
 -> 读取或构建本地 vector_index.json
 -> 计算余弦相似度
+-> 过滤低于 MIN_SEMANTIC_SIMILARITY 的结果
 -> 取最相近的 3 个 chunks
 -> 交给模型回答
 ```
@@ -235,12 +240,111 @@ while True:
 模型如果请求工具，程序执行工具，再把结果放回 messages。
 ```
 
+当前 Agent loop 还加了最大轮数保护：
+
+```text
+MAX_AGENT_STEPS = 6
+```
+
+如果模型一直请求工具、不输出最终回答，程序会停止并返回提示，避免无限循环。
+
+## 工具执行结果
+
+真实应用里，模型可能会：
+
+```text
+调用不存在的工具
+生成坏的 JSON 参数
+漏掉必填参数
+触发工具内部异常
+```
+
+所以 `execute_tool_call()` 不再直接让程序崩掉，而是把工具结果统一包装成：
+
+```json
+{
+  "ok": true,
+  "tool_name": "query_course_info",
+  "data": {}
+}
+```
+
+或者：
+
+```json
+{
+  "ok": false,
+  "tool_name": "query_course_info",
+  "error": {
+    "type": "invalid_arguments",
+    "message": "工具参数解析失败"
+  }
+}
+```
+
+这样模型第二轮看到工具失败时，可以向用户说明问题或追问信息。
+
+## 实际应用问题和当前解法
+
+### 模型选错工具或参数不完整
+
+当前解法：
+
+```text
+用清晰的 tool name、description、parameters
+在 system prompt 里要求缺参数时先追问
+工具执行层返回 ok=false 错误结构
+```
+
+### 工具调用失败导致程序崩溃
+
+当前解法：
+
+```text
+execute_tool_call 捕获参数解析错误、未知工具、参数不匹配和运行时异常
+错误作为 tool message 回传给模型
+```
+
+### 模型无限调用工具
+
+当前解法：
+
+```text
+MAX_AGENT_STEPS 限制最大 Agent loop 轮数
+```
+
+### RAG 检索不到资料
+
+当前解法：
+
+```text
+RAG 工具返回 found=false 和 result_count=0
+system prompt 要求没有资料时如实说明
+```
+
+### RAG 结果来源不清楚
+
+当前解法：
+
+```text
+每个 chunk 都带 source 和 chunk_id
+模型回答知识库问题时可以提及来源
+```
+
+### embedding 重复计算浪费成本
+
+当前解法：
+
+```text
+embedding_cache.json 缓存文本 embedding
+vector_index.json 缓存 chunk + embedding + metadata
+```
+
 ## 适合继续学习的方向
 
 下一步可以继续做：
 
 - 接入真正的向量数据库
-- 增加工具错误处理
 - 增加测试用例
 - 把工具和 schema 拆成多个文件
 

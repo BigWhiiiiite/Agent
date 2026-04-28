@@ -12,6 +12,8 @@ DOCS_DIR = Path(__file__).parent / "docs"
 EMBEDDING_CACHE_PATH = Path(__file__).parent / "embedding_cache.json"
 VECTOR_INDEX_PATH = Path(__file__).parent / "vector_index.json"
 TOP_K = 3
+MAX_AGENT_STEPS = 6
+MIN_SEMANTIC_SIMILARITY = float(os.getenv("MIN_SEMANTIC_SIMILARITY", "0.2"))
 
 
 def load_embedding_cache() -> dict:
@@ -43,6 +45,43 @@ def save_vector_index(index: dict) -> None:
         json.dumps(index, ensure_ascii=False),
         encoding="utf-8"
     )
+
+
+def build_tool_success(tool_name: str, data: dict) -> dict:
+    return {
+        "ok": True,
+        "tool_name": tool_name,
+        "data": data
+    }
+
+
+def build_tool_error(tool_name: str | None, error_type: str, message: str) -> dict:
+    return {
+        "ok": False,
+        "tool_name": tool_name,
+        "error": {
+            "type": error_type,
+            "message": message
+        }
+    }
+
+
+def build_tool_message(tool_call_id: str, payload: dict) -> dict:
+    return {
+        "role": "tool",
+        "tool_call_id": tool_call_id,
+        "content": json.dumps(payload, ensure_ascii=False)
+    }
+
+
+def parse_tool_arguments(arguments) -> dict:
+    if isinstance(arguments, str):
+        return json.loads(arguments)
+
+    if isinstance(arguments, dict):
+        return arguments
+
+    raise TypeError("工具参数必须是 JSON 字符串或 dict。")
 
 
 def query_teacher_schedule(teacher_name: str, date: str) -> dict:
@@ -152,11 +191,14 @@ def search_knowledge_base(query: str) -> dict:
             })
 
     results.sort(key=lambda item: item["score"], reverse=True)
+    top_results = results[:TOP_K]
 
     return {
         "query": query,
+        "found": bool(top_results),
+        "result_count": len(top_results),
         "top_k": TOP_K,
-        "results": results[:TOP_K]
+        "results": top_results
     }
 
 
@@ -203,13 +245,20 @@ def semantic_search_knowledge_base(query: str) -> dict:
         })
 
     results.sort(key=lambda item: item["similarity"], reverse=True)
+    top_results = [
+        result for result in results
+        if result["similarity"] >= MIN_SEMANTIC_SIMILARITY
+    ][:TOP_K]
 
     return {
         "query": query,
+        "found": bool(top_results),
+        "result_count": len(top_results),
         "embedding_model": EMBEDDING_MODEL,
         "index_path": VECTOR_INDEX_PATH.name,
+        "min_similarity": MIN_SEMANTIC_SIMILARITY,
         "top_k": TOP_K,
-        "results": results[:TOP_K]
+        "results": top_results
     }
 
 
@@ -350,22 +399,47 @@ TOOL_REGISTRY = {
 
 
 def execute_tool_call(tool_call: dict) -> dict:
-    function_name = tool_call["function"]["name"]
-    arguments = tool_call["function"]["arguments"]
+    tool_call_id = tool_call.get("id", "unknown_tool_call")
+    function_info = tool_call.get("function", {})
+    function_name = function_info.get("name")
+    raw_arguments = function_info.get("arguments", {})
 
-    if isinstance(arguments, str):
-        arguments = json.loads(arguments)
+    if function_name not in TOOL_REGISTRY:
+        payload = build_tool_error(
+            function_name,
+            "unknown_tool",
+            f"工具 {function_name} 没有注册，无法执行。"
+        )
+        return build_tool_message(tool_call_id, payload)
 
-    tool_function = TOOL_REGISTRY[function_name]
-    result = tool_function(**arguments)
+    try:
+        arguments = parse_tool_arguments(raw_arguments)
+    except (json.JSONDecodeError, TypeError) as error:
+        payload = build_tool_error(
+            function_name,
+            "invalid_arguments",
+            f"工具参数解析失败：{error}"
+        )
+        return build_tool_message(tool_call_id, payload)
 
-    tool_message = {
-        "role": "tool",
-        "tool_call_id": tool_call["id"],
-        "content": json.dumps(result, ensure_ascii=False)
-    }
+    try:
+        tool_function = TOOL_REGISTRY[function_name]
+        result = tool_function(**arguments)
+        payload = build_tool_success(function_name, result)
+    except TypeError as error:
+        payload = build_tool_error(
+            function_name,
+            "argument_mismatch",
+            f"工具参数和函数签名不匹配：{error}"
+        )
+    except Exception as error:
+        payload = build_tool_error(
+            function_name,
+            "tool_runtime_error",
+            f"工具执行失败：{error}"
+        )
 
-    return tool_message
+    return build_tool_message(tool_call_id, payload)
 
 
 def call_llm(messages: list, tools: list) -> dict:
@@ -388,6 +462,22 @@ def print_messages(title: str, messages: list) -> None:
         print(json.dumps(message, ensure_ascii=False, indent=2))
 
 
+def print_tool_trace(tool_call: dict, tool_message: dict) -> None:
+    function_info = tool_call.get("function", {})
+    function_name = function_info.get("name")
+    raw_arguments = function_info.get("arguments", {})
+    payload = json.loads(tool_message["content"])
+    status = "成功" if payload["ok"] else "失败"
+
+    print("\n工具调用 trace")
+    print(f"tool={function_name}")
+    print(f"arguments={raw_arguments}")
+    print(f"status={status}")
+
+    if not payload["ok"]:
+        print(f"error={payload['error']['message']}")
+
+
 def create_initial_messages() -> list:
     return [
         {
@@ -399,7 +489,9 @@ def create_initial_messages() -> list:
                 "回答学校制度、课程规则、Agent或RAG概念时，优先搜索本地知识库。"
                 "如果用户的问题和知识库里的原文措辞可能不一致，优先使用语义检索工具。"
                 "如果缺少必要参数，就先追问用户，不要编造参数。"
-                "如果知识库没有查到相关资料，就如实说明没有查到。"
+                "回答知识库问题时，要基于工具返回的 results，并可简短提及来源 source。"
+                "如果知识库工具返回 found=false，就如实说明没有查到相关资料。"
+                "工具结果里的 ok=false 表示工具失败，需要根据 error.message 向用户简短说明。"
                 "最终回答要简短、自然。"
             )
         }
@@ -415,7 +507,7 @@ def run_agent(messages: list, user_input: str, debug: bool = False) -> str:
     if debug:
         print_messages("用户输入后 messages", messages)
 
-    while True:
+    for _ in range(MAX_AGENT_STEPS):
         assistant_message = call_llm(messages, tools=TOOLS)
         messages.append(assistant_message)
 
@@ -429,8 +521,13 @@ def run_agent(messages: list, user_input: str, debug: bool = False) -> str:
             tool_message = execute_tool_call(tool_call)
             messages.append(tool_message)
 
+            if debug:
+                print_tool_trace(tool_call, tool_message)
+
         if debug:
             print_messages("工具执行完成并加入 tool message 后", messages)
+
+    return "工具调用轮数超过上限，已停止。请换一种问法或稍后再试。"
 
 
 if __name__ == "__main__":
