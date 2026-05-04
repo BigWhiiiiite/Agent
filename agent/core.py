@@ -2,6 +2,7 @@ from agent.config import MAX_AGENT_STEPS
 from agent.debug import print_messages, print_tool_trace
 from agent.executor import execute_tool_call
 from agent.llm import call_llm
+from agent.memory import trim_messages
 from agent.router import DEFAULT_CONTEXT, select_tools
 from agent.tracing import append_tool_call_trace, create_trace, finish_trace
 
@@ -41,12 +42,19 @@ def run_agent(
         "role": "user",
         "content": user_input
     })
+    trimmed_count = trim_messages(messages)
 
     if debug:
+        if trimmed_count:
+            print(f"\n已裁剪较早的 {trimmed_count} 条 messages")
         print_messages("用户输入后 messages", messages)
         print(f"\n本轮候选工具：{selected_tool_names}")
 
     for _ in range(MAX_AGENT_STEPS):
+        trimmed_count = trim_messages(messages)
+        if debug and trimmed_count:
+            print(f"\n已裁剪较早的 {trimmed_count} 条 messages")
+
         assistant_message = call_llm(messages, tools=available_tools)
         messages.append(assistant_message)
 
@@ -55,6 +63,7 @@ def run_agent(
 
         if "tool_calls" not in assistant_message:
             final_answer = assistant_message["content"]
+            trim_messages(messages)
             finish_trace(trace, final_answer, "final_answer")
             return final_answer
 
@@ -70,5 +79,6 @@ def run_agent(
             print_messages("工具执行完成并加入 tool message 后", messages)
 
     final_answer = "工具调用轮数超过上限，已停止。请换一种问法或稍后再试。"
+    trim_messages(messages)
     finish_trace(trace, final_answer, "max_steps")
     return final_answer

@@ -97,5 +97,23 @@
     "expected_fields": {
       "available_slots": ["14:00", "15:00", "16:30"]
     }
+  },
+  {
+    "id": "memory_keep_complete_recent_turns",
+    "type": "memory",
+    "max_messages": 7,
+    "expected_roles": [
+      "system",
+      "user",
+      "assistant",
+      "tool",
+      "assistant",
+      "user",
+      "assistant"
+    ],
+    "expected_user_messages": [
+      "第二轮问题",
+      "第三轮问题"
+    ]
   }
 ]

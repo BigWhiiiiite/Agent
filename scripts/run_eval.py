@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
+from agent.memory import trim_messages
 from agent.rag import search_knowledge_base
 from agent.router import select_tool_names
 from agent.tools import TOOL_REGISTRY
@@ -69,6 +70,64 @@ def evaluate_data_tool_case(case: dict) -> dict:
     }
 
 
+def build_sample_memory_messages() -> list:
+    return [
+        {"role": "system", "content": "system prompt"},
+        {"role": "user", "content": "第一轮问题"},
+        {"role": "assistant", "content": "第一轮回答"},
+        {"role": "user", "content": "第二轮问题"},
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {
+                        "name": "query_teacher_schedule",
+                        "arguments": {"teacher_name": "李老师", "date": "周五"}
+                    }
+                }
+            ]
+        },
+        {"role": "tool", "tool_call_id": "call_1", "content": "{}"},
+        {"role": "assistant", "content": "第二轮回答"},
+        {"role": "user", "content": "第三轮问题"},
+        {"role": "assistant", "content": "第三轮回答"}
+    ]
+
+
+def evaluate_memory_case(case: dict) -> dict:
+    messages = build_sample_memory_messages()
+    trim_messages(messages, max_messages=case["max_messages"])
+
+    actual_roles = [
+        message["role"]
+        for message in messages
+    ]
+    actual_user_messages = [
+        message["content"]
+        for message in messages
+        if message["role"] == "user"
+    ]
+
+    actual = {
+        "roles": actual_roles,
+        "user_messages": actual_user_messages
+    }
+    expected = {
+        "roles": case["expected_roles"],
+        "user_messages": case["expected_user_messages"]
+    }
+
+    return {
+        "id": case["id"],
+        "passed": actual == expected,
+        "expected": expected,
+        "actual": actual
+    }
+
+
 def evaluate_case(case: dict) -> dict:
     if case["type"] == "router":
         return evaluate_router_case(case)
@@ -78,6 +137,9 @@ def evaluate_case(case: dict) -> dict:
 
     if case["type"] == "data_tool":
         return evaluate_data_tool_case(case)
+
+    if case["type"] == "memory":
+        return evaluate_memory_case(case)
 
     return {
         "id": case["id"],

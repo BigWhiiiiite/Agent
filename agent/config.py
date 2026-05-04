@@ -12,4 +12,5 @@ VECTOR_INDEX_PATH = BASE_DIR / "vector_index.json"
 TRACE_LOG_PATH = BASE_DIR / "logs" / "agent_trace.jsonl"
 TOP_K = 3
 MAX_AGENT_STEPS = 6
+MAX_CONTEXT_MESSAGES = int(os.getenv("MAX_CONTEXT_MESSAGES", "24"))
 MIN_SEMANTIC_SIMILARITY = float(os.getenv("MIN_SEMANTIC_SIMILARITY", "0.2"))

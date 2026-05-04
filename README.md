@@ -27,6 +27,7 @@
 - Tool Router 动态工具选择
 - Agent Trace 审计日志
 - FastAPI 多轮 HTTP 接口
+- 短期 memory 裁剪，防止 messages 无限增长
 - Eval 测试集
 
 ## 文件结构
@@ -40,6 +41,7 @@
 │   ├── debug.py
 │   ├── executor.py
 │   ├── llm.py
+│   ├── memory.py
 │   ├── rag.py
 │   ├── router.py
 │   ├── session_store.py
@@ -78,6 +80,7 @@ core.py      Agent loop 和初始 messages
 debug.py     messages 和 tool trace 打印
 executor.py  工具执行器，负责执行 tool_call 和错误包装
 llm.py       OpenAI 模型调用
+memory.py    短期上下文裁剪，保留 system 和最近几轮完整对话
 rag.py       chunk、关键词检索、embedding、vector index
 router.py    根据权限、页面场景和意图筛选候选工具
 session_store.py  HTTP 会话存储，用 session_id 保存多轮 messages
@@ -129,6 +132,7 @@ text-embedding-3-small
 export OPENAI_MODEL="gpt-5-mini"
 export OPENAI_EMBEDDING_MODEL="text-embedding-3-small"
 export MIN_SEMANTIC_SIMILARITY="0.2"
+export MAX_CONTEXT_MESSAGES="24"
 ```
 
 ## 运行
@@ -408,6 +412,40 @@ MAX_AGENT_STEPS = 6
 
 如果模型一直请求工具、不输出最终回答，程序会停止并返回提示，避免无限循环。
 
+## Memory 裁剪
+
+HTTP API 支持 `session_id` 后，同一个用户的 `messages` 会不断变长。
+
+真实项目里这会带来几个问题：
+
+```text
+请求 token 越来越多，成本变高
+上下文越长，响应越慢
+超过模型上下文窗口后，请求可能失败
+很早以前的历史可能干扰当前问题
+```
+
+所以当前项目加了一个教学版短期 memory：
+
+```text
+保留 system message
+按完整对话轮次裁剪历史
+优先保留最近几轮
+默认最多保留 MAX_CONTEXT_MESSAGES = 24 条 message
+```
+
+这里特意没有简单地截取最后 N 条 message，因为 Agent 历史里可能有工具调用：
+
+```text
+assistant tool_calls
+-> tool result
+-> assistant final answer
+```
+
+如果只保留其中一半，模型会看到不完整的工具调用历史，可能导致 API 报错或回答混乱。
+
+所以 `memory.py` 会按“用户一轮问题 + 后续 assistant/tool 消息”作为一个整体来保留或丢弃。
+
 ## 工具执行结果
 
 真实应用里，模型可能会：
@@ -612,7 +650,7 @@ vector_index.json 缓存 chunk + embedding + metadata
 
 ```text
 eval_cases.json 固化典型问题和预期结果
-scripts/run_eval.py 检查 Tool Router、关键词 RAG 和结构化数据工具
+scripts/run_eval.py 检查 Tool Router、关键词 RAG、结构化数据工具和 memory 裁剪
 第一版 eval 不依赖 LLM，保证便宜、稳定、可重复
 ```
 
@@ -625,6 +663,16 @@ app.py 提供 FastAPI HTTP 接口
 GET /health 用于健康检查
 POST /chat 用于外部系统或前端调用 Agent
 session_store.py 用内存字典按 session_id 保存 messages，支持多轮 Web 聊天
+```
+
+### 多轮聊天导致 messages 无限增长
+
+当前解法：
+
+```text
+memory.py 在调用模型前后裁剪 messages
+保留 system message 和最近几轮完整对话
+MAX_CONTEXT_MESSAGES 控制最大 message 数量
 ```
 
 ## 适合继续学习的方向
