@@ -29,6 +29,15 @@
 
 ```text
 .
+├── agent/
+│   ├── __init__.py
+│   ├── config.py
+│   ├── core.py
+│   ├── debug.py
+│   ├── executor.py
+│   ├── llm.py
+│   ├── rag.py
+│   └── tools.py
 ├── main.py
 ├── requirements.txt
 └── docs/
@@ -37,7 +46,19 @@
     └── school_rules.txt
 ```
 
-`main.py` 是主程序。
+`main.py` 是命令行入口。
+
+`agent/` 是 Agent 核心代码：
+
+```text
+config.py    配置项，比如模型名、缓存路径、TOP_K
+core.py      Agent loop 和初始 messages
+debug.py     messages 和 tool trace 打印
+executor.py  工具执行器，负责执行 tool_call 和错误包装
+llm.py       OpenAI 模型调用
+rag.py       chunk、关键词检索、embedding、vector index
+tools.py     业务工具、工具 schema、工具注册表
+```
 
 `docs/` 是本地知识库，RAG 工具会从这里检索资料。
 
@@ -221,7 +242,7 @@ metadata 过滤
 核心循环在 `run_agent()`：
 
 ```python
-while True:
+for _ in range(MAX_AGENT_STEPS):
     assistant_message = call_llm(messages, tools=TOOLS)
     messages.append(assistant_message)
 
@@ -346,6 +367,6 @@ vector_index.json 缓存 chunk + embedding + metadata
 
 - 接入真正的向量数据库
 - 增加测试用例
-- 把工具和 schema 拆成多个文件
+- 把 fake_db 替换成真实数据库或外部 API
 
-现在这个项目保持在单文件结构，是为了让初学者能完整看懂 Agent 骨架。
+现在项目已经从单文件教学版，升级成了按职责拆分的应用版结构。
