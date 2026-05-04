@@ -6,6 +6,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-5-mini")
 EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
 DOCS_DIR = BASE_DIR / "docs"
+DATA_DIR = BASE_DIR / "data"
 EMBEDDING_CACHE_PATH = BASE_DIR / "embedding_cache.json"
 VECTOR_INDEX_PATH = BASE_DIR / "vector_index.json"
 TRACE_LOG_PATH = BASE_DIR / "logs" / "agent_trace.jsonl"

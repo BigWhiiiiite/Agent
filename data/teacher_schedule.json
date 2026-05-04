@@ -1,0 +1,12 @@
+[
+  {
+    "teacher_name": "李老师",
+    "date": "周五",
+    "available_slots": ["14:00", "15:00", "16:30"]
+  },
+  {
+    "teacher_name": "王老师",
+    "date": "周三",
+    "available_slots": ["10:00", "11:00"]
+  }
+]

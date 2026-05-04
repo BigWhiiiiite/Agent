@@ -1,13 +1,19 @@
+from agent.data_store import load_courses, load_teacher_schedule
 from agent.rag import search_knowledge_base, semantic_search_knowledge_base
 
 
 def query_teacher_schedule(teacher_name: str, date: str) -> dict:
-    fake_db = {
-        ("李老师", "周五"): ["14:00", "15:00", "16:30"],
-        ("王老师", "周三"): ["10:00", "11:00"],
-    }
+    schedules = load_teacher_schedule()
+    slots = []
 
-    slots = fake_db.get((teacher_name, date), [])
+    for schedule in schedules:
+        if (
+            schedule["teacher_name"] == teacher_name
+            and schedule["date"] == date
+        ):
+            slots = schedule["available_slots"]
+            break
+
     return {
         "teacher_name": teacher_name,
         "date": date,
@@ -16,22 +22,8 @@ def query_teacher_schedule(teacher_name: str, date: str) -> dict:
 
 
 def query_course_info(course_name: str) -> dict:
-    fake_db = {
-        "Agent开发入门": {
-            "teacher": "李老师",
-            "time": "周五 14:00",
-            "classroom": "A101",
-            "description": "从工具调用、Agent loop 和 RAG 的基础概念开始，带你做一个最小 Agent。"
-        },
-        "Python基础": {
-            "teacher": "王老师",
-            "time": "周三 10:00",
-            "classroom": "B203",
-            "description": "学习 Python 语法、函数、字典、列表和简单项目实践。"
-        }
-    }
-
-    course_info = fake_db.get(course_name)
+    courses = load_courses()
+    course_info = courses.get(course_name)
 
     if course_info is None:
         return {

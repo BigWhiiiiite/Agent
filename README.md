@@ -48,6 +48,9 @@
 ├── requirements.txt
 ├── scripts/
 │   └── run_eval.py
+├── data/
+│   ├── courses.json
+│   └── teacher_schedule.json
 └── docs/
     ├── agent_notes.txt
     ├── course_rules.txt
@@ -59,6 +62,8 @@
 `eval_cases.json` 是评估用例。
 
 `scripts/run_eval.py` 会运行本地 eval，不调用 LLM，不消耗 API。
+
+`data/` 是结构化业务数据，课程和老师时间工具会从这里读取数据。
 
 `agent/` 是 Agent 核心代码：
 
@@ -139,6 +144,7 @@ python3 scripts/run_eval.py
 ```text
 Tool Router 是否选出预期候选工具
 关键词 RAG 是否命中预期 chunk
+结构化数据工具是否返回预期字段
 ```
 
 它不会调用真实 LLM，也不会调用 embedding API。
@@ -148,7 +154,7 @@ Tool Router 是否选出预期候选工具
 ```text
 [PASS] router_teacher_schedule
 [PASS] rag_leave_policy
-Passed 8/8 eval cases.
+Passed 10/10 eval cases.
 ```
 
 ## 当前工具
@@ -156,6 +162,12 @@ Passed 8/8 eval cases.
 ### query_teacher_schedule
 
 查询某位老师在指定日期的空闲时间。
+
+数据来自：
+
+```text
+data/teacher_schedule.json
+```
 
 示例问题：
 
@@ -166,6 +178,12 @@ Passed 8/8 eval cases.
 ### query_course_info
 
 查询课程介绍、授课老师、时间和教室。
+
+数据来自：
+
+```text
+data/courses.json
+```
 
 示例问题：
 
@@ -511,7 +529,7 @@ vector_index.json 缓存 chunk + embedding + metadata
 
 ```text
 eval_cases.json 固化典型问题和预期结果
-scripts/run_eval.py 检查 Tool Router 和关键词 RAG
+scripts/run_eval.py 检查 Tool Router、关键词 RAG 和结构化数据工具
 第一版 eval 不依赖 LLM，保证便宜、稳定、可重复
 ```
 

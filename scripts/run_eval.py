@@ -8,6 +8,7 @@ sys.path.insert(0, str(ROOT_DIR))
 
 from agent.rag import search_knowledge_base
 from agent.router import select_tool_names
+from agent.tools import TOOL_REGISTRY
 
 
 EVAL_CASES_PATH = ROOT_DIR / "eval_cases.json"
@@ -51,12 +52,32 @@ def evaluate_keyword_rag_case(case: dict) -> dict:
     }
 
 
+def evaluate_data_tool_case(case: dict) -> dict:
+    tool = TOOL_REGISTRY[case["tool_name"]]
+    result = tool(**case["arguments"])
+    expected_fields = case["expected_fields"]
+    actual_fields = {
+        key: result.get(key)
+        for key in expected_fields
+    }
+
+    return {
+        "id": case["id"],
+        "passed": actual_fields == expected_fields,
+        "expected": expected_fields,
+        "actual": actual_fields
+    }
+
+
 def evaluate_case(case: dict) -> dict:
     if case["type"] == "router":
         return evaluate_router_case(case)
 
     if case["type"] == "keyword_rag":
         return evaluate_keyword_rag_case(case)
+
+    if case["type"] == "data_tool":
+        return evaluate_data_tool_case(case)
 
     return {
         "id": case["id"],

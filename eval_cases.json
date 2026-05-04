@@ -72,5 +72,30 @@
     "type": "keyword_rag",
     "question": "工具调用的流程是什么？",
     "expected_chunk_ids": ["agent_notes-2"]
+  },
+  {
+    "id": "data_course_info",
+    "type": "data_tool",
+    "tool_name": "query_course_info",
+    "arguments": {
+      "course_name": "Python基础"
+    },
+    "expected_fields": {
+      "found": true,
+      "teacher": "王老师",
+      "classroom": "B203"
+    }
+  },
+  {
+    "id": "data_teacher_schedule",
+    "type": "data_tool",
+    "tool_name": "query_teacher_schedule",
+    "arguments": {
+      "teacher_name": "李老师",
+      "date": "周五"
+    },
+    "expected_fields": {
+      "available_slots": ["14:00", "15:00", "16:30"]
+    }
   }
 ]
