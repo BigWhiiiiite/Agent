@@ -3,6 +3,7 @@ from agent.debug import print_messages, print_tool_trace
 from agent.executor import execute_tool_call
 from agent.llm import call_llm
 from agent.router import DEFAULT_CONTEXT, select_tools
+from agent.tracing import append_tool_call_trace, create_trace, finish_trace
 
 
 def create_initial_messages() -> list:
@@ -33,6 +34,8 @@ def run_agent(
 ) -> str:
     context = context or DEFAULT_CONTEXT
     available_tools = select_tools(user_input, context)
+    selected_tool_names = [tool["function"]["name"] for tool in available_tools]
+    trace = create_trace(user_input, context, selected_tool_names)
 
     messages.append({
         "role": "user",
@@ -41,8 +44,7 @@ def run_agent(
 
     if debug:
         print_messages("用户输入后 messages", messages)
-        tool_names = [tool["function"]["name"] for tool in available_tools]
-        print(f"\n本轮候选工具：{tool_names}")
+        print(f"\n本轮候选工具：{selected_tool_names}")
 
     for _ in range(MAX_AGENT_STEPS):
         assistant_message = call_llm(messages, tools=available_tools)
@@ -52,11 +54,14 @@ def run_agent(
             print_messages("模型返回 assistant message 后", messages)
 
         if "tool_calls" not in assistant_message:
-            return assistant_message["content"]
+            final_answer = assistant_message["content"]
+            finish_trace(trace, final_answer, "final_answer")
+            return final_answer
 
         for tool_call in assistant_message["tool_calls"]:
             tool_message = execute_tool_call(tool_call)
             messages.append(tool_message)
+            append_tool_call_trace(trace, tool_call, tool_message)
 
             if debug:
                 print_tool_trace(tool_call, tool_message)
@@ -64,4 +69,6 @@ def run_agent(
         if debug:
             print_messages("工具执行完成并加入 tool message 后", messages)
 
-    return "工具调用轮数超过上限，已停止。请换一种问法或稍后再试。"
+    final_answer = "工具调用轮数超过上限，已停止。请换一种问法或稍后再试。"
+    finish_trace(trace, final_answer, "max_steps")
+    return final_answer

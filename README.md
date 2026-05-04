@@ -25,6 +25,7 @@
 - Agent 最大轮数保护
 - 调试 trace
 - Tool Router 动态工具选择
+- Agent Trace 审计日志
 
 ## 文件结构
 
@@ -39,6 +40,7 @@
 │   ├── llm.py
 │   ├── rag.py
 │   ├── router.py
+│   ├── tracing.py
 │   └── tools.py
 ├── main.py
 ├── requirements.txt
@@ -60,6 +62,7 @@ executor.py  工具执行器，负责执行 tool_call 和错误包装
 llm.py       OpenAI 模型调用
 rag.py       chunk、关键词检索、embedding、vector index
 router.py    根据权限、页面场景和意图筛选候选工具
+tracing.py   写入 Agent 审计日志，便于复盘和评估
 tools.py     业务工具、工具 schema、工具注册表
 ```
 
@@ -70,9 +73,10 @@ tools.py     业务工具、工具 schema、工具注册表
 ```text
 embedding_cache.json
 vector_index.json
+logs/agent_trace.jsonl
 ```
 
-这两个文件是本地缓存，已经放进 `.gitignore`，不会提交到 GitHub。
+这些文件是本地运行数据，已经放进 `.gitignore`，不会提交到 GitHub。
 
 ## 安装依赖
 
@@ -362,6 +366,55 @@ embedding-based tool retrieval
 ```text
 权限类规则必须由程序侧硬控制，不能完全交给模型。
 意图路由可以先用规则实现，后续替换为 LLM router 或语义工具检索。
+```
+
+## Agent Trace
+
+项目会把每次用户请求写入：
+
+```text
+logs/agent_trace.jsonl
+```
+
+`.jsonl` 是一行一个 JSON，适合做日志。
+
+每条 trace 会记录：
+
+```text
+timestamp
+user_input
+context
+selected_tools
+tool_calls
+final_answer
+stop_reason
+```
+
+其中 `tool_calls` 会记录：
+
+```text
+tool_name
+arguments
+result_summary
+```
+
+RAG 工具的结果摘要会保留：
+
+```text
+found
+result_count
+sources
+chunk_id
+```
+
+这样当 Agent 答错时，可以复盘：
+
+```text
+Router 是否选错候选工具
+LLM 是否调用了正确工具
+工具参数是否正确
+RAG 是否搜到正确资料
+最终回答是否基于工具结果
 ```
 
 ## 实际应用问题和当前解法

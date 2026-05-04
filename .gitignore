@@ -3,3 +3,4 @@ __pycache__/
 .env
 embedding_cache.json
 vector_index.json
+logs/
