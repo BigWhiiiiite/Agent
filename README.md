@@ -26,6 +26,7 @@
 - 调试 trace
 - Tool Router 动态工具选择
 - Agent Trace 审计日志
+- FastAPI HTTP 接口
 - Eval 测试集
 
 ## 文件结构
@@ -44,6 +45,7 @@
 │   ├── tracing.py
 │   └── tools.py
 ├── main.py
+├── app.py
 ├── eval_cases.json
 ├── requirements.txt
 ├── scripts/
@@ -58,6 +60,8 @@
 ```
 
 `main.py` 是命令行入口。
+
+`app.py` 是 FastAPI HTTP 服务入口。
 
 `eval_cases.json` 是评估用例。
 
@@ -132,6 +136,48 @@ python3 main.py
 ```
 
 输入 `exit` 退出。
+
+## 运行 HTTP API
+
+启动服务：
+
+```bash
+uvicorn app:app --reload
+```
+
+健康检查：
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+聊天接口：
+
+```bash
+curl -X POST http://127.0.0.1:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "请假制度是什么？",
+    "context": {
+      "user_role": "student",
+      "page": "general"
+    }
+  }'
+```
+
+返回格式：
+
+```json
+{
+  "answer": "...",
+  "context": {
+    "user_role": "student",
+    "page": "general"
+  }
+}
+```
+
+当前 HTTP API 是无状态单轮接口。每次请求都会创建新的 messages。后续如果要做网页多轮聊天，可以继续增加 session_id 和会话存储。
 
 ## 运行 Eval
 
@@ -531,6 +577,17 @@ vector_index.json 缓存 chunk + embedding + metadata
 eval_cases.json 固化典型问题和预期结果
 scripts/run_eval.py 检查 Tool Router、关键词 RAG 和结构化数据工具
 第一版 eval 不依赖 LLM，保证便宜、稳定、可重复
+```
+
+### Agent 只能在命令行使用
+
+当前解法：
+
+```text
+app.py 提供 FastAPI HTTP 接口
+GET /health 用于健康检查
+POST /chat 用于外部系统或前端调用 Agent
+第一版 API 是无状态单轮接口，后续可增加 session 存储支持多轮 Web 聊天
 ```
 
 ## 适合继续学习的方向
