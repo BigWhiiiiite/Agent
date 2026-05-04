@@ -27,6 +27,7 @@
 - Tool Router 动态工具选择
 - Agent Trace 审计日志
 - FastAPI 多轮 HTTP 接口
+- SSE 流式聊天接口
 - 短期 memory 裁剪，防止 messages 无限增长
 - Eval 测试集
 
@@ -76,10 +77,10 @@
 
 ```text
 config.py    配置项，比如模型名、缓存路径、TOP_K
-core.py      Agent loop 和初始 messages
+core.py      Agent loop、流式 Agent loop 和初始 messages
 debug.py     messages 和 tool trace 打印
 executor.py  工具执行器，负责执行 tool_call 和错误包装
-llm.py       OpenAI 模型调用
+llm.py       OpenAI 普通模型调用和流式模型调用
 memory.py    短期上下文裁剪，保留 system 和最近几轮完整对话
 rag.py       chunk、关键词检索、embedding、vector index
 router.py    根据权限、页面场景和意图筛选候选工具
@@ -220,6 +221,37 @@ curl -X DELETE http://127.0.0.1:8000/sessions/demo-user-1
 
 注意：当前会话存储只是教学版内存字典。服务重启后会话会消失，多进程部署时也不会共享会话。真实项目里通常会换成 Redis、数据库或平台自带的会话存储。
 
+流式聊天接口：
+
+```bash
+curl -N -X POST http://127.0.0.1:8000/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "demo-user-1",
+    "message": "帮我总结一下RAG为什么要切块",
+    "context": {
+      "user_role": "student",
+      "page": "general"
+    }
+  }'
+```
+
+`/chat/stream` 返回的是 SSE 格式。模型生成最终回答时，会不断返回：
+
+```text
+event: delta
+data: {"content": "..."}
+```
+
+结束时会返回：
+
+```text
+event: done
+data: {"session_id": "demo-user-1", "message_count": 8}
+```
+
+如果这一轮需要先调用工具，接口会先执行工具，等工具结果回到 `messages` 后，再开始流式输出最终回答。
+
 ## 运行 Eval
 
 ```bash
@@ -232,6 +264,8 @@ python3 scripts/run_eval.py
 Tool Router 是否选出预期候选工具
 关键词 RAG 是否命中预期 chunk
 结构化数据工具是否返回预期字段
+memory 裁剪是否保留完整最近轮次
+streaming 是否能拼回最终回答
 ```
 
 它不会调用真实 LLM，也不会调用 embedding API。
@@ -241,7 +275,7 @@ Tool Router 是否选出预期候选工具
 ```text
 [PASS] router_teacher_schedule
 [PASS] rag_leave_policy
-Passed 10/10 eval cases.
+Passed 13/13 eval cases.
 ```
 
 ## 当前工具
@@ -411,6 +445,18 @@ MAX_AGENT_STEPS = 6
 ```
 
 如果模型一直请求工具、不输出最终回答，程序会停止并返回提示，避免无限循环。
+
+项目还提供了 `run_agent_stream()`：
+
+```text
+用户输入
+-> 模型可能先调用工具
+-> 程序执行工具
+-> 模型基于工具结果生成最终回答
+-> 最终回答以 delta 形式逐段 yield 出去
+```
+
+它和 `run_agent()` 使用同一套 messages、工具执行器、router、memory 裁剪和 trace，只是输出方式从“一次性返回字符串”变成“边生成边返回片段”。
 
 ## Memory 裁剪
 
@@ -650,7 +696,7 @@ vector_index.json 缓存 chunk + embedding + metadata
 
 ```text
 eval_cases.json 固化典型问题和预期结果
-scripts/run_eval.py 检查 Tool Router、关键词 RAG、结构化数据工具和 memory 裁剪
+scripts/run_eval.py 检查 Tool Router、关键词 RAG、结构化数据工具、memory 裁剪和 streaming
 第一版 eval 不依赖 LLM，保证便宜、稳定、可重复
 ```
 
@@ -662,7 +708,19 @@ scripts/run_eval.py 检查 Tool Router、关键词 RAG、结构化数据工具�
 app.py 提供 FastAPI HTTP 接口
 GET /health 用于健康检查
 POST /chat 用于外部系统或前端调用 Agent
+POST /chat/stream 用于前端流式显示 Agent 回答
 session_store.py 用内存字典按 session_id 保存 messages，支持多轮 Web 聊天
+```
+
+### 普通接口要等完整回答才返回
+
+当前解法：
+
+```text
+llm.py 支持 OpenAI stream=True
+core.py 提供 run_agent_stream
+app.py 提供 /chat/stream SSE 接口
+前端可以收到 delta 后逐字或逐段渲染
 ```
 
 ### 多轮聊天导致 messages 无限增长

@@ -1,8 +1,11 @@
+import json
+
 from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from agent.router import DEFAULT_CONTEXT
-from agent.core import run_agent
+from agent.core import run_agent, run_agent_stream
 from agent.session_store import (
     delete_session,
     get_session_messages,
@@ -46,15 +49,7 @@ class DeleteSessionResponse(BaseModel):
     deleted: bool
 
 
-@app.get("/health")
-def health_check() -> dict:
-    return {
-        "status": "ok"
-    }
-
-
-@app.post("/chat")
-def chat(request: ChatRequest) -> ChatResponse:
+def build_chat_runtime(request: ChatRequest) -> tuple[str, dict, list]:
     session_id = request.session_id.strip() or "default"
     context = DEFAULT_CONTEXT.copy()
 
@@ -65,6 +60,25 @@ def chat(request: ChatRequest) -> ChatResponse:
         messages = reset_session(session_id)
     else:
         messages = get_session_messages(session_id)
+
+    return session_id, context, messages
+
+
+def format_sse_event(event: str, data: dict) -> str:
+    json_data = json.dumps(data, ensure_ascii=False)
+    return f"event: {event}\ndata: {json_data}\n\n"
+
+
+@app.get("/health")
+def health_check() -> dict:
+    return {
+        "status": "ok"
+    }
+
+
+@app.post("/chat")
+def chat(request: ChatRequest) -> ChatResponse:
+    session_id, context, messages = build_chat_runtime(request)
 
     answer = run_agent(
         messages,
@@ -78,6 +92,44 @@ def chat(request: ChatRequest) -> ChatResponse:
         context=context,
         session_id=session_id,
         message_count=len(messages)
+    )
+
+
+@app.post("/chat/stream")
+def chat_stream(request: ChatRequest) -> StreamingResponse:
+    session_id, context, messages = build_chat_runtime(request)
+
+    def event_generator():
+        try:
+            for delta in run_agent_stream(
+                messages,
+                request.message,
+                debug=False,
+                context=context
+            ):
+                yield format_sse_event("delta", {"content": delta})
+
+            yield format_sse_event(
+                "done",
+                {
+                    "session_id": session_id,
+                    "message_count": len(messages)
+                }
+            )
+        except Exception as error:
+            yield format_sse_event(
+                "error",
+                {
+                    "message": str(error)
+                }
+            )
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache"
+        }
     )
 
 

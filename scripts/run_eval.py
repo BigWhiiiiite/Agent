@@ -6,6 +6,8 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
+import agent.core as agent_core
+from agent.llm import append_tool_call_delta, build_streamed_assistant_message
 from agent.memory import trim_messages
 from agent.rag import search_knowledge_base
 from agent.router import select_tool_names
@@ -128,6 +130,102 @@ def evaluate_memory_case(case: dict) -> dict:
     }
 
 
+def evaluate_streaming_case(case: dict) -> dict:
+    messages = agent_core.create_initial_messages()
+    original_stream_llm = agent_core.stream_llm
+
+    def fake_stream_llm(messages: list, tools: list):
+        for chunk in case["expected_chunks"]:
+            yield {
+                "type": "content_delta",
+                "delta": chunk
+            }
+
+        yield {
+            "type": "assistant_message",
+            "message": {
+                "role": "assistant",
+                "content": case["expected_answer"]
+            }
+        }
+
+    try:
+        agent_core.stream_llm = fake_stream_llm
+        chunks = list(
+            agent_core.run_agent_stream(
+                messages,
+                case["question"],
+                context={
+                    "user_role": "student",
+                    "page": "general"
+                }
+            )
+        )
+    finally:
+        agent_core.stream_llm = original_stream_llm
+
+    actual = {
+        "chunks": chunks,
+        "answer": "".join(chunks),
+        "last_message": messages[-1]
+    }
+    expected = {
+        "chunks": case["expected_chunks"],
+        "answer": case["expected_answer"],
+        "last_message": {
+            "role": "assistant",
+            "content": case["expected_answer"]
+        }
+    }
+
+    return {
+        "id": case["id"],
+        "passed": actual == expected,
+        "expected": expected,
+        "actual": actual
+    }
+
+
+def evaluate_streaming_tool_call_case(case: dict) -> dict:
+    tool_calls_by_index = {}
+    append_tool_call_delta(
+        tool_calls_by_index,
+        {
+            "index": 0,
+            "id": "call_1",
+            "type": "function",
+            "function": {
+                "name": "query_teacher_schedule",
+                "arguments": "{\"teacher_name\":\"李"
+            }
+        }
+    )
+    append_tool_call_delta(
+        tool_calls_by_index,
+        {
+            "index": 0,
+            "function": {
+                "arguments": "老师\",\"date\":\"周五\"}"
+            }
+        }
+    )
+    assistant_message = build_streamed_assistant_message(
+        "assistant",
+        [],
+        tool_calls_by_index
+    )
+
+    actual = assistant_message["tool_calls"]
+    expected = case["expected_tool_calls"]
+
+    return {
+        "id": case["id"],
+        "passed": actual == expected,
+        "expected": expected,
+        "actual": actual
+    }
+
+
 def evaluate_case(case: dict) -> dict:
     if case["type"] == "router":
         return evaluate_router_case(case)
@@ -140,6 +238,12 @@ def evaluate_case(case: dict) -> dict:
 
     if case["type"] == "memory":
         return evaluate_memory_case(case)
+
+    if case["type"] == "streaming":
+        return evaluate_streaming_case(case)
+
+    if case["type"] == "streaming_tool_call":
+        return evaluate_streaming_tool_call_case(case)
 
     return {
         "id": case["id"],

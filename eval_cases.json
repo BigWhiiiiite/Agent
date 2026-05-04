@@ -115,5 +115,26 @@
       "第二轮问题",
       "第三轮问题"
     ]
+  },
+  {
+    "id": "streaming_collects_final_answer",
+    "type": "streaming",
+    "question": "你好",
+    "expected_chunks": ["你", "好"],
+    "expected_answer": "你好"
+  },
+  {
+    "id": "streaming_assembles_tool_call",
+    "type": "streaming_tool_call",
+    "expected_tool_calls": [
+      {
+        "id": "call_1",
+        "type": "function",
+        "function": {
+          "name": "query_teacher_schedule",
+          "arguments": "{\"teacher_name\":\"李老师\",\"date\":\"周五\"}"
+        }
+      }
+    ]
   }
 ]
