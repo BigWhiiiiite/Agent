@@ -26,7 +26,7 @@
 - 调试 trace
 - Tool Router 动态工具选择
 - Agent Trace 审计日志
-- FastAPI HTTP 接口
+- FastAPI 多轮 HTTP 接口
 - Eval 测试集
 
 ## 文件结构
@@ -42,6 +42,7 @@
 │   ├── llm.py
 │   ├── rag.py
 │   ├── router.py
+│   ├── session_store.py
 │   ├── tracing.py
 │   └── tools.py
 ├── main.py
@@ -79,6 +80,7 @@ executor.py  工具执行器，负责执行 tool_call 和错误包装
 llm.py       OpenAI 模型调用
 rag.py       chunk、关键词检索、embedding、vector index
 router.py    根据权限、页面场景和意图筛选候选工具
+session_store.py  HTTP 会话存储，用 session_id 保存多轮 messages
 tracing.py   写入 Agent 审计日志，便于复盘和评估
 tools.py     业务工具、工具 schema、工具注册表
 ```
@@ -157,6 +159,7 @@ curl http://127.0.0.1:8000/health
 curl -X POST http://127.0.0.1:8000/chat \
   -H "Content-Type: application/json" \
   -d '{
+    "session_id": "demo-user-1",
     "message": "请假制度是什么？",
     "context": {
       "user_role": "student",
@@ -173,11 +176,45 @@ curl -X POST http://127.0.0.1:8000/chat \
   "context": {
     "user_role": "student",
     "page": "general"
-  }
+  },
+  "session_id": "demo-user-1",
+  "message_count": 4
 }
 ```
 
-当前 HTTP API 是无状态单轮接口。每次请求都会创建新的 messages。后续如果要做网页多轮聊天，可以继续增加 session_id 和会话存储。
+同一个 `session_id` 会复用同一份 `messages`，所以 HTTP API 已经可以支持多轮聊天。比如第二轮可以继续使用同一个 `session_id`：
+
+```bash
+curl -X POST http://127.0.0.1:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "demo-user-1",
+    "message": "那如果请假超过三天呢？",
+    "context": {
+      "user_role": "student",
+      "page": "general"
+    }
+  }'
+```
+
+如果想重新开始这个会话，可以在请求里加：
+
+```json
+{
+  "session_id": "demo-user-1",
+  "message": "重新问一个问题",
+  "reset": true
+}
+```
+
+也可以查看或删除当前内存里的会话：
+
+```bash
+curl http://127.0.0.1:8000/sessions
+curl -X DELETE http://127.0.0.1:8000/sessions/demo-user-1
+```
+
+注意：当前会话存储只是教学版内存字典。服务重启后会话会消失，多进程部署时也不会共享会话。真实项目里通常会换成 Redis、数据库或平台自带的会话存储。
 
 ## 运行 Eval
 
@@ -587,7 +624,7 @@ scripts/run_eval.py 检查 Tool Router、关键词 RAG 和结构化数据工具
 app.py 提供 FastAPI HTTP 接口
 GET /health 用于健康检查
 POST /chat 用于外部系统或前端调用 Agent
-第一版 API 是无状态单轮接口，后续可增加 session 存储支持多轮 Web 聊天
+session_store.py 用内存字典按 session_id 保存 messages，支持多轮 Web 聊天
 ```
 
 ## 适合继续学习的方向
