@@ -1,0 +1,76 @@
+[
+  {
+    "id": "router_teacher_schedule",
+    "type": "router",
+    "question": "帮我看看李老师周五什么时候有空",
+    "context": {
+      "user_role": "student",
+      "page": "general"
+    },
+    "expected_tools": ["query_teacher_schedule"]
+  },
+  {
+    "id": "router_course_info",
+    "type": "router",
+    "question": "Agent开发入门这门课在哪里上？",
+    "context": {
+      "user_role": "student",
+      "page": "general"
+    },
+    "expected_tools": ["query_course_info"]
+  },
+  {
+    "id": "router_sick_leave",
+    "type": "router",
+    "question": "生病不能上课怎么办？",
+    "context": {
+      "user_role": "student",
+      "page": "general"
+    },
+    "expected_tools": [
+      "search_knowledge_base",
+      "semantic_search_knowledge_base"
+    ]
+  },
+  {
+    "id": "router_rag_chunking",
+    "type": "router",
+    "question": "RAG为什么要切块？",
+    "context": {
+      "user_role": "student",
+      "page": "general"
+    },
+    "expected_tools": [
+      "search_knowledge_base",
+      "semantic_search_knowledge_base"
+    ]
+  },
+  {
+    "id": "router_course_page",
+    "type": "router",
+    "question": "Python基础在哪里上？",
+    "context": {
+      "user_role": "student",
+      "page": "course"
+    },
+    "expected_tools": ["query_course_info"]
+  },
+  {
+    "id": "rag_leave_policy",
+    "type": "keyword_rag",
+    "question": "请假制度是什么？",
+    "expected_chunk_ids": ["school_rules-1"]
+  },
+  {
+    "id": "rag_attendance_rule",
+    "type": "keyword_rag",
+    "question": "迟到多久算缺勤？",
+    "expected_chunk_ids": ["school_rules-2"]
+  },
+  {
+    "id": "rag_agent_loop",
+    "type": "keyword_rag",
+    "question": "工具调用的流程是什么？",
+    "expected_chunk_ids": ["agent_notes-2"]
+  }
+]

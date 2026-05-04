@@ -26,6 +26,7 @@
 - 调试 trace
 - Tool Router 动态工具选择
 - Agent Trace 审计日志
+- Eval 测试集
 
 ## 文件结构
 
@@ -43,7 +44,10 @@
 │   ├── tracing.py
 │   └── tools.py
 ├── main.py
+├── eval_cases.json
 ├── requirements.txt
+├── scripts/
+│   └── run_eval.py
 └── docs/
     ├── agent_notes.txt
     ├── course_rules.txt
@@ -51,6 +55,10 @@
 ```
 
 `main.py` 是命令行入口。
+
+`eval_cases.json` 是评估用例。
+
+`scripts/run_eval.py` 会运行本地 eval，不调用 LLM，不消耗 API。
 
 `agent/` 是 Agent 核心代码：
 
@@ -119,6 +127,29 @@ python3 main.py
 ```
 
 输入 `exit` 退出。
+
+## 运行 Eval
+
+```bash
+python3 scripts/run_eval.py
+```
+
+第一版 eval 只评估本地确定性能力：
+
+```text
+Tool Router 是否选出预期候选工具
+关键词 RAG 是否命中预期 chunk
+```
+
+它不会调用真实 LLM，也不会调用 embedding API。
+
+示例输出：
+
+```text
+[PASS] router_teacher_schedule
+[PASS] rag_leave_policy
+Passed 8/8 eval cases.
+```
 
 ## 当前工具
 
@@ -474,12 +505,22 @@ embedding_cache.json 缓存文本 embedding
 vector_index.json 缓存 chunk + embedding + metadata
 ```
 
+### Agent 行为缺少评估
+
+当前解法：
+
+```text
+eval_cases.json 固化典型问题和预期结果
+scripts/run_eval.py 检查 Tool Router 和关键词 RAG
+第一版 eval 不依赖 LLM，保证便宜、稳定、可重复
+```
+
 ## 适合继续学习的方向
 
 下一步可以继续做：
 
 - 接入真正的向量数据库
-- 增加测试用例
+- 增加 LLM 工具选择 eval
 - 把 fake_db 替换成真实数据库或外部 API
 
 现在项目已经从单文件教学版，升级成了按职责拆分的应用版结构。
