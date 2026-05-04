@@ -2,7 +2,7 @@ from agent.config import MAX_AGENT_STEPS
 from agent.debug import print_messages, print_tool_trace
 from agent.executor import execute_tool_call
 from agent.llm import call_llm
-from agent.tools import TOOLS
+from agent.router import DEFAULT_CONTEXT, select_tools
 
 
 def create_initial_messages() -> list:
@@ -25,7 +25,15 @@ def create_initial_messages() -> list:
     ]
 
 
-def run_agent(messages: list, user_input: str, debug: bool = False) -> str:
+def run_agent(
+    messages: list,
+    user_input: str,
+    debug: bool = False,
+    context: dict | None = None
+) -> str:
+    context = context or DEFAULT_CONTEXT
+    available_tools = select_tools(user_input, context)
+
     messages.append({
         "role": "user",
         "content": user_input
@@ -33,9 +41,11 @@ def run_agent(messages: list, user_input: str, debug: bool = False) -> str:
 
     if debug:
         print_messages("用户输入后 messages", messages)
+        tool_names = [tool["function"]["name"] for tool in available_tools]
+        print(f"\n本轮候选工具：{tool_names}")
 
     for _ in range(MAX_AGENT_STEPS):
-        assistant_message = call_llm(messages, tools=TOOLS)
+        assistant_message = call_llm(messages, tools=available_tools)
         messages.append(assistant_message)
 
         if debug:

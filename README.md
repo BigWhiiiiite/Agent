@@ -24,6 +24,7 @@
 - 工具错误处理
 - Agent 最大轮数保护
 - 调试 trace
+- Tool Router 动态工具选择
 
 ## 文件结构
 
@@ -37,6 +38,7 @@
 │   ├── executor.py
 │   ├── llm.py
 │   ├── rag.py
+│   ├── router.py
 │   └── tools.py
 ├── main.py
 ├── requirements.txt
@@ -57,6 +59,7 @@ debug.py     messages 和 tool trace 打印
 executor.py  工具执行器，负责执行 tool_call 和错误包装
 llm.py       OpenAI 模型调用
 rag.py       chunk、关键词检索、embedding、vector index
+router.py    根据权限、页面场景和意图筛选候选工具
 tools.py     业务工具、工具 schema、工具注册表
 ```
 
@@ -305,6 +308,62 @@ MAX_AGENT_STEPS = 6
 
 这样模型第二轮看到工具失败时，可以向用户说明问题或追问信息。
 
+## Tool Router
+
+真实 Agent 应用通常不会每轮都把所有工具暴露给模型。
+
+原因是：
+
+```text
+工具太多会增加 token 成本
+模型更容易选错工具
+敏感工具不能随便暴露
+不同页面或用户角色可用工具不同
+```
+
+所以项目里增加了 `agent/router.py`。
+
+当前路由分三层：
+
+```text
+1. 权限过滤：根据 user_role 判断用户能不能用某类工具
+2. 场景过滤：根据 page 判断当前页面适合哪些工具
+3. 意图过滤：根据用户问题判断本轮更可能需要哪些工具
+```
+
+命令行入口里默认 context 是：
+
+```python
+context = {
+    "user_role": "student",
+    "page": "general"
+}
+```
+
+当前 `detect_intents()` 使用关键词做简化意图识别。这个实现不是重点，重点是结构：
+
+```text
+用户问题 + 产品上下文
+-> select_tools()
+-> 候选工具列表
+-> LLM 在候选工具中选择是否调用
+```
+
+后续可以把 `detect_intents()` 替换成：
+
+```text
+LLM 分类器
+embedding-based tool retrieval
+业务规则引擎
+```
+
+面试里可以说：
+
+```text
+权限类规则必须由程序侧硬控制，不能完全交给模型。
+意图路由可以先用规则实现，后续替换为 LLM router 或语义工具检索。
+```
+
 ## 实际应用问题和当前解法
 
 ### 模型选错工具或参数不完整
@@ -313,6 +372,7 @@ MAX_AGENT_STEPS = 6
 
 ```text
 用清晰的 tool name、description、parameters
+Tool Router 先筛选候选工具，减少模型误选
 在 system prompt 里要求缺参数时先追问
 工具执行层返回 ok=false 错误结构
 ```

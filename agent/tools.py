@@ -134,6 +134,37 @@ TOOLS = [
     SEMANTIC_KNOWLEDGE_BASE_TOOL_SCHEMA
 ]
 
+TOOL_METADATA = {
+    "query_teacher_schedule": {
+        "schema": TEACHER_SCHEDULE_TOOL_SCHEMA,
+        "intents": ["teacher_schedule"],
+        "allowed_roles": ["student", "teacher", "admin"],
+        "pages": ["general", "teacher"],
+        "risk_level": "low"
+    },
+    "query_course_info": {
+        "schema": COURSE_TOOL_SCHEMA,
+        "intents": ["course_info"],
+        "allowed_roles": ["student", "teacher", "admin"],
+        "pages": ["general", "course"],
+        "risk_level": "low"
+    },
+    "search_knowledge_base": {
+        "schema": KNOWLEDGE_BASE_TOOL_SCHEMA,
+        "intents": ["knowledge_base", "agent_learning"],
+        "allowed_roles": ["student", "teacher", "admin"],
+        "pages": ["general", "knowledge_base", "course"],
+        "risk_level": "low"
+    },
+    "semantic_search_knowledge_base": {
+        "schema": SEMANTIC_KNOWLEDGE_BASE_TOOL_SCHEMA,
+        "intents": ["knowledge_base", "agent_learning"],
+        "allowed_roles": ["student", "teacher", "admin"],
+        "pages": ["general", "knowledge_base", "course"],
+        "risk_level": "low"
+    }
+}
+
 
 TOOL_REGISTRY = {
     "query_teacher_schedule": query_teacher_schedule,
