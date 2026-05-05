@@ -1,5 +1,7 @@
 import json
 import sys
+import threading
+import time
 from pathlib import Path
 
 
@@ -11,6 +13,7 @@ from agent.llm import append_tool_call_delta, build_streamed_assistant_message
 from agent.memory import trim_messages
 from agent.rag import search_knowledge_base
 from agent.router import select_tool_names
+from agent.session_store import use_session_messages
 from agent.tools import TOOL_REGISTRY
 
 
@@ -226,6 +229,39 @@ def evaluate_streaming_tool_call_case(case: dict) -> dict:
     }
 
 
+def evaluate_session_lock_case(case: dict) -> dict:
+    events = []
+    first_started = threading.Event()
+
+    def first_worker() -> None:
+        with use_session_messages(case["session_id"], reset=True):
+            events.append("first-start")
+            first_started.set()
+            time.sleep(0.05)
+            events.append("first-end")
+
+    def second_worker() -> None:
+        first_started.wait(timeout=1)
+        with use_session_messages(case["session_id"]):
+            events.append("second-start")
+            events.append("second-end")
+
+    first_thread = threading.Thread(target=first_worker)
+    second_thread = threading.Thread(target=second_worker)
+
+    first_thread.start()
+    second_thread.start()
+    first_thread.join()
+    second_thread.join()
+
+    return {
+        "id": case["id"],
+        "passed": events == case["expected_events"],
+        "expected": case["expected_events"],
+        "actual": events
+    }
+
+
 def evaluate_case(case: dict) -> dict:
     if case["type"] == "router":
         return evaluate_router_case(case)
@@ -244,6 +280,9 @@ def evaluate_case(case: dict) -> dict:
 
     if case["type"] == "streaming_tool_call":
         return evaluate_streaming_tool_call_case(case)
+
+    if case["type"] == "session_lock":
+        return evaluate_session_lock_case(case)
 
     return {
         "id": case["id"],

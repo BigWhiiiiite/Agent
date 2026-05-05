@@ -136,5 +136,16 @@
         }
       }
     ]
+  },
+  {
+    "id": "session_lock_serializes_same_session",
+    "type": "session_lock",
+    "session_id": "eval-lock-session",
+    "expected_events": [
+      "first-start",
+      "first-end",
+      "second-start",
+      "second-end"
+    ]
   }
 ]

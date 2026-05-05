@@ -8,9 +8,8 @@ from agent.router import DEFAULT_CONTEXT
 from agent.core import run_agent, run_agent_stream
 from agent.session_store import (
     delete_session,
-    get_session_messages,
     list_session_ids,
-    reset_session,
+    use_session_messages,
 )
 
 
@@ -49,19 +48,14 @@ class DeleteSessionResponse(BaseModel):
     deleted: bool
 
 
-def build_chat_runtime(request: ChatRequest) -> tuple[str, dict, list]:
+def build_chat_context(request: ChatRequest) -> tuple[str, dict]:
     session_id = request.session_id.strip() or "default"
     context = DEFAULT_CONTEXT.copy()
 
     if request.context:
         context.update(request.context)
 
-    if request.reset:
-        messages = reset_session(session_id)
-    else:
-        messages = get_session_messages(session_id)
-
-    return session_id, context, messages
+    return session_id, context
 
 
 def format_sse_event(event: str, data: dict) -> str:
@@ -78,44 +72,46 @@ def health_check() -> dict:
 
 @app.post("/chat")
 def chat(request: ChatRequest) -> ChatResponse:
-    session_id, context, messages = build_chat_runtime(request)
+    session_id, context = build_chat_context(request)
 
-    answer = run_agent(
-        messages,
-        request.message,
-        debug=False,
-        context=context
-    )
+    with use_session_messages(session_id, reset=request.reset) as messages:
+        answer = run_agent(
+            messages,
+            request.message,
+            debug=False,
+            context=context
+        )
 
-    return ChatResponse(
-        answer=answer,
-        context=context,
-        session_id=session_id,
-        message_count=len(messages)
-    )
+        return ChatResponse(
+            answer=answer,
+            context=context,
+            session_id=session_id,
+            message_count=len(messages)
+        )
 
 
 @app.post("/chat/stream")
 def chat_stream(request: ChatRequest) -> StreamingResponse:
-    session_id, context, messages = build_chat_runtime(request)
+    session_id, context = build_chat_context(request)
 
     def event_generator():
         try:
-            for delta in run_agent_stream(
-                messages,
-                request.message,
-                debug=False,
-                context=context
-            ):
-                yield format_sse_event("delta", {"content": delta})
+            with use_session_messages(session_id, reset=request.reset) as messages:
+                for delta in run_agent_stream(
+                    messages,
+                    request.message,
+                    debug=False,
+                    context=context
+                ):
+                    yield format_sse_event("delta", {"content": delta})
 
-            yield format_sse_event(
-                "done",
-                {
-                    "session_id": session_id,
-                    "message_count": len(messages)
-                }
-            )
+                yield format_sse_event(
+                    "done",
+                    {
+                        "session_id": session_id,
+                        "message_count": len(messages)
+                    }
+                )
         except Exception as error:
             yield format_sse_event(
                 "error",

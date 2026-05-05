@@ -28,6 +28,7 @@
 - Agent Trace 审计日志
 - FastAPI 多轮 HTTP 接口
 - SSE 流式聊天接口
+- 同 session 并发请求保护
 - 短期 memory 裁剪，防止 messages 无限增长
 - Eval 测试集
 
@@ -84,7 +85,7 @@ llm.py       OpenAI 普通模型调用和流式模型调用
 memory.py    短期上下文裁剪，保留 system 和最近几轮完整对话
 rag.py       chunk、关键词检索、embedding、vector index
 router.py    根据权限、页面场景和意图筛选候选工具
-session_store.py  HTTP 会话存储，用 session_id 保存多轮 messages
+session_store.py  HTTP 会话存储和同 session 锁，用 session_id 保存多轮 messages
 tracing.py   写入 Agent 审计日志，便于复盘和评估
 tools.py     业务工具、工具 schema、工具注册表
 ```
@@ -266,6 +267,7 @@ Tool Router 是否选出预期候选工具
 结构化数据工具是否返回预期字段
 memory 裁剪是否保留完整最近轮次
 streaming 是否能拼回最终回答
+同 session 并发请求是否串行执行
 ```
 
 它不会调用真实 LLM，也不会调用 embedding API。
@@ -275,7 +277,7 @@ streaming 是否能拼回最终回答
 ```text
 [PASS] router_teacher_schedule
 [PASS] rag_leave_policy
-Passed 13/13 eval cases.
+Passed 14/14 eval cases.
 ```
 
 ## 当前工具
@@ -696,7 +698,7 @@ vector_index.json 缓存 chunk + embedding + metadata
 
 ```text
 eval_cases.json 固化典型问题和预期结果
-scripts/run_eval.py 检查 Tool Router、关键词 RAG、结构化数据工具、memory 裁剪和 streaming
+scripts/run_eval.py 检查 Tool Router、关键词 RAG、结构化数据工具、memory 裁剪、streaming 和 session lock
 第一版 eval 不依赖 LLM，保证便宜、稳定、可重复
 ```
 
@@ -709,7 +711,18 @@ app.py 提供 FastAPI HTTP 接口
 GET /health 用于健康检查
 POST /chat 用于外部系统或前端调用 Agent
 POST /chat/stream 用于前端流式显示 Agent 回答
-session_store.py 用内存字典按 session_id 保存 messages，支持多轮 Web 聊天
+session_store.py 用内存字典按 session_id 保存 messages，并用同 session 锁保护多轮上下文
+```
+
+### 同一个 session 同时来了多个请求
+
+当前解法：
+
+```text
+session_store.py 为每个 session_id 创建独立 RLock
+/chat 在完整 run_agent 期间持有锁
+/chat/stream 在整个流式生成期间持有锁
+同一个 session 串行执行，不同 session 互不阻塞
 ```
 
 ### 普通接口要等完整回答才返回
