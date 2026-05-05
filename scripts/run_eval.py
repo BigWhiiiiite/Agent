@@ -146,19 +146,44 @@ def build_sample_memory_messages() -> list:
     ]
 
 
+def build_long_memory_messages() -> list:
+    long_text = "很长的上下文" * 80
+
+    return [
+        {"role": "system", "content": "system prompt"},
+        {"role": "user", "content": "第一轮长问题：" + long_text},
+        {"role": "assistant", "content": "第一轮回答"},
+        {"role": "user", "content": "第二轮长问题：" + long_text},
+        {"role": "assistant", "content": "第二轮回答"},
+        {"role": "user", "content": "第三轮短问题"},
+        {"role": "assistant", "content": "第三轮回答"}
+    ]
+
+
 def evaluate_memory_case(case: dict) -> dict:
-    messages = build_sample_memory_messages()
+    if case.get("fixture") == "long_memory":
+        messages = build_long_memory_messages()
+    else:
+        messages = build_sample_memory_messages()
 
     def fake_summary_builder(
         previous_summary: str,
         removed_turns: list[list],
         max_chars: int
     ) -> str:
-        return "LLM摘要：第一轮问题已经讨论过，后续问题可能会引用这段历史。"
+        return (
+            "LLM摘要\n"
+            "用户目标/问题：第一轮问题已经讨论过。\n"
+            "已知事实：后续问题可能会引用这段历史。\n"
+            "用户偏好：无。\n"
+            "工具结果：无。\n"
+            "未完成事项：无。"
+        )
 
     trim_messages(
         messages,
         max_messages=case["max_messages"],
+        max_context_chars=case.get("max_context_chars", 1000000),
         max_recent_turns=case["max_recent_turns"],
         summary_builder=fake_summary_builder
     )

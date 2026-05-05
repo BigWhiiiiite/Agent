@@ -1,6 +1,7 @@
 from collections.abc import Callable
 
 from agent.config import (
+    MAX_CONTEXT_CHARS,
     MAX_CONTEXT_MESSAGES,
     MAX_RECENT_TURNS,
     MAX_SUMMARY_CHARS,
@@ -103,12 +104,61 @@ def build_rule_summary(turns: list[list]) -> str:
     summary_parts = []
 
     if questions:
-        summary_parts.append("用户之前问过：" + "；".join(questions[-6:]))
+        summary_parts.append("用户目标/问题：" + "；".join(questions[-6:]))
 
     if tool_names:
-        summary_parts.append("历史中调用过工具：" + "、".join(tool_names[-8:]))
+        summary_parts.append("已调用工具：" + "、".join(tool_names[-8:]))
 
-    return "。".join(summary_parts)
+    if not summary_parts:
+        return ""
+
+    return "\n".join(summary_parts)
+
+
+def estimate_message_chars(message: dict) -> int:
+    total = len(str(message.get("role", "")))
+    total += len(str(message.get("content", "") or ""))
+
+    for tool_call in message.get("tool_calls", []):
+        function_info = tool_call.get("function", {})
+        total += len(str(function_info.get("name", "")))
+        total += len(str(function_info.get("arguments", "")))
+
+    total += len(str(message.get("tool_call_id", "")))
+    total += len(str(message.get("name", "")))
+
+    return total
+
+
+def estimate_messages_chars(messages: list) -> int:
+    return sum(
+        estimate_message_chars(message)
+        for message in messages
+    )
+
+
+def estimate_summary_message_chars(
+    previous_summary_message: dict | None,
+    removed_turns: list[list]
+) -> int:
+    if not previous_summary_message and not removed_turns:
+        return 0
+
+    return len(SUMMARY_PREFIX) + 1 + MAX_SUMMARY_CHARS
+
+
+def exceeds_context_limits(
+    messages: list,
+    max_messages: int,
+    max_context_chars: int
+) -> bool:
+    too_many_messages = len(messages) > max_messages
+    too_many_chars = (
+        max_context_chars > 0
+        and estimate_messages_chars(messages) > max_context_chars
+    )
+
+    return too_many_messages or too_many_chars
 
 
 def normalize_summary_text(summary_text: str) -> str:
@@ -121,7 +171,7 @@ def clip_summary_text(summary_text: str) -> str:
     if len(summary_text) <= MAX_SUMMARY_CHARS:
         return summary_text
 
-    return summary_text[-MAX_SUMMARY_CHARS:]
+    return summary_text[:MAX_SUMMARY_CHARS]
 
 
 def build_fallback_summary_text(
@@ -171,6 +221,12 @@ def build_summary_message(
         previous_summary = previous_summary_message.get("content", "")
         previous_summary = normalize_summary_text(previous_summary)
 
+    if previous_summary and not removed_turns:
+        return {
+            "role": "system",
+            "content": SUMMARY_PREFIX + " " + clip_summary_text(previous_summary)
+        }
+
     summary_text = build_summary_text(
         previous_summary,
         removed_turns,
@@ -197,10 +253,11 @@ def flatten_turns(turns: list[list]) -> list:
 def trim_messages(
     messages: list,
     max_messages: int = MAX_CONTEXT_MESSAGES,
+    max_context_chars: int = MAX_CONTEXT_CHARS,
     max_recent_turns: int = MAX_RECENT_TURNS,
     summary_builder: SummaryBuilder | None = None
 ) -> int:
-    if len(messages) <= max_messages:
+    if not exceeds_context_limits(messages, max_messages, max_context_chars):
         return 0
 
     system_messages, summary_message, turns = split_memory_sections(messages)
@@ -209,8 +266,9 @@ def trim_messages(
         return 0
 
     previous_summary_message = summary_message
-    removed_turns = turns[:-max_recent_turns]
-    kept_turns = turns[-max_recent_turns:]
+    recent_turn_count = max(1, max_recent_turns)
+    removed_turns = turns[:-recent_turn_count]
+    kept_turns = turns[-recent_turn_count:]
 
     def estimate_new_message_count() -> int:
         summary_count = 1 if previous_summary_message or removed_turns else 0
@@ -220,7 +278,22 @@ def trim_messages(
             + len(flatten_turns(kept_turns))
         )
 
-    while len(kept_turns) > 1 and estimate_new_message_count() > max_messages:
+    def estimate_new_context_chars() -> int:
+        return (
+            estimate_messages_chars(system_messages)
+            + estimate_summary_message_chars(previous_summary_message, removed_turns)
+            + estimate_messages_chars(flatten_turns(kept_turns))
+        )
+
+    def still_exceeds_limits() -> bool:
+        too_many_messages = estimate_new_message_count() > max_messages
+        too_many_chars = (
+            max_context_chars > 0
+            and estimate_new_context_chars() > max_context_chars
+        )
+        return too_many_messages or too_many_chars
+
+    while len(kept_turns) > 1 and still_exceeds_limits():
         removed_turns.append(kept_turns.pop(0))
 
     summary_message = build_summary_message(

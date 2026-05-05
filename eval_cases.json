@@ -129,6 +129,27 @@
     ]
   },
   {
+    "id": "memory_trim_by_context_chars",
+    "type": "memory",
+    "fixture": "long_memory",
+    "max_messages": 20,
+    "max_context_chars": 260,
+    "max_recent_turns": 3,
+    "expected_roles": [
+      "system",
+      "system",
+      "user",
+      "assistant"
+    ],
+    "expected_user_messages": [
+      "第三轮短问题"
+    ],
+    "expected_summary_contains": [
+      "LLM摘要",
+      "第一轮问题"
+    ]
+  },
+  {
     "id": "streaming_collects_final_answer",
     "type": "streaming",
     "question": "你好",

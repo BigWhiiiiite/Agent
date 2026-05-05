@@ -156,6 +156,7 @@ export OPENAI_MODEL="gpt-5-mini"
 export OPENAI_EMBEDDING_MODEL="text-embedding-3-small"
 export MIN_SEMANTIC_SIMILARITY="0.2"
 export MAX_CONTEXT_MESSAGES="24"
+export MAX_CONTEXT_CHARS="8000"
 export MAX_RECENT_TURNS="4"
 export MAX_SUMMARY_CHARS="600"
 ```
@@ -549,6 +550,7 @@ HTTP API 支持 `session_id` 后，同一个用户的 `messages` 会不断变长
 旧历史交给 LLM 压缩成一条“对话摘要”
 优先保留最近几轮完整原文
 默认最多保留 MAX_CONTEXT_MESSAGES = 24 条 message
+同时用 MAX_CONTEXT_CHARS = 8000 做字符预算保护
 ```
 
 这里特意没有简单地截取最后 N 条 message，因为 Agent 历史里可能有工具调用：
@@ -561,7 +563,7 @@ assistant tool_calls
 
 如果只保留其中一半，模型会看到不完整的工具调用历史，可能导致 API 报错或回答混乱。
 
-所以 `memory.py` 会按“用户一轮问题 + 后续 assistant/tool 消息”作为一个整体来处理。超过上限时，较早的完整 turn 会交给 `llm.py` 里的 memory summarizer 合并进 summary，最近的 turn 继续保留原文。如果总结调用失败，会退回到规则版摘要，避免整个聊天流程中断。
+所以 `memory.py` 会按“用户一轮问题 + 后续 assistant/tool 消息”作为一个整体来处理。超过 message 数量或字符预算时，较早的完整 turn 会交给 `llm.py` 里的 memory summarizer 合并进结构化 summary，最近的 turn 继续保留原文。如果总结调用失败，会退回到规则版摘要，避免整个聊天流程中断。
 
 ## 工具执行结果
 
@@ -838,6 +840,7 @@ memory.py 在调用模型前后压缩 messages
 旧历史优先用 LLM 合并成“对话摘要”
 最近 MAX_RECENT_TURNS 轮保留完整原文
 MAX_CONTEXT_MESSAGES 控制最大 message 数量
+MAX_CONTEXT_CHARS 控制近似上下文字符预算
 ```
 
 ## 适合继续学习的方向
