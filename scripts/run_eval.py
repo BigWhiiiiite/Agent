@@ -198,6 +198,7 @@ def evaluate_streaming_case(case: dict) -> dict:
 
     try:
         agent_core.stream_llm = fake_stream_llm
+        trace_holder = {}
         chunks = list(
             agent_core.run_agent_stream(
                 messages,
@@ -205,7 +206,8 @@ def evaluate_streaming_case(case: dict) -> dict:
                 context={
                     "user_role": "student",
                     "page": "general"
-                }
+                },
+                trace_callback=lambda trace: trace_holder.update({"trace": trace})
             )
         )
     finally:
@@ -214,7 +216,9 @@ def evaluate_streaming_case(case: dict) -> dict:
     actual = {
         "chunks": chunks,
         "answer": "".join(chunks),
-        "last_message": messages[-1]
+        "last_message": messages[-1],
+        "trace_answer": trace_holder["trace"]["final_answer"],
+        "trace_stop_reason": trace_holder["trace"]["stop_reason"]
     }
     expected = {
         "chunks": case["expected_chunks"],
@@ -222,7 +226,9 @@ def evaluate_streaming_case(case: dict) -> dict:
         "last_message": {
             "role": "assistant",
             "content": case["expected_answer"]
-        }
+        },
+        "trace_answer": case["expected_answer"],
+        "trace_stop_reason": "final_answer"
     }
 
     return {

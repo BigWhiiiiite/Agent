@@ -31,7 +31,8 @@ def run_agent(
     messages: list,
     user_input: str,
     debug: bool = False,
-    context: dict | None = None
+    context: dict | None = None,
+    trace_callback=None
 ) -> str:
     context = context or DEFAULT_CONTEXT
     available_tools = select_tools(user_input, context)
@@ -65,6 +66,8 @@ def run_agent(
             final_answer = assistant_message["content"]
             trim_messages(messages)
             finish_trace(trace, final_answer, "final_answer")
+            if trace_callback:
+                trace_callback(trace)
             return final_answer
 
         for tool_call in assistant_message["tool_calls"]:
@@ -81,6 +84,8 @@ def run_agent(
     final_answer = "工具调用轮数超过上限，已停止。请换一种问法或稍后再试。"
     trim_messages(messages)
     finish_trace(trace, final_answer, "max_steps")
+    if trace_callback:
+        trace_callback(trace)
     return final_answer
 
 
@@ -88,7 +93,8 @@ def run_agent_stream(
     messages: list,
     user_input: str,
     debug: bool = False,
-    context: dict | None = None
+    context: dict | None = None,
+    trace_callback=None
 ):
     context = context or DEFAULT_CONTEXT
     available_tools = select_tools(user_input, context)
@@ -136,6 +142,8 @@ def run_agent_stream(
             final_answer = assistant_message.get("content", "")
             trim_messages(messages)
             finish_trace(trace, final_answer, "final_answer")
+            if trace_callback:
+                trace_callback(trace)
             return
 
         for tool_call in assistant_message["tool_calls"]:
@@ -152,6 +160,8 @@ def run_agent_stream(
     final_answer = "工具调用轮数超过上限，已停止。请换一种问法或稍后再试。"
     trim_messages(messages)
     finish_trace(trace, final_answer, "max_steps")
+    if trace_callback:
+        trace_callback(trace)
 
     for char in final_answer:
         yield char

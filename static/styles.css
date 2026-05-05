@@ -161,7 +161,8 @@ button {
 }
 
 .quick-prompts button:hover,
-.secondary-action:hover {
+.secondary-action:hover,
+.trace-header button:hover {
   border-color: rgba(22, 134, 111, 0.42);
   background: #e9f2ee;
 }
@@ -176,7 +177,8 @@ button {
 }
 
 .secondary-action svg,
-.send-button svg {
+.send-button svg,
+.trace-header svg {
   width: 18px;
   height: 18px;
   fill: none;
@@ -184,6 +186,110 @@ button {
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.trace-panel {
+  display: grid;
+  gap: 10px;
+  min-height: 180px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.trace-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.trace-header h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.trace-header button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  color: var(--muted);
+}
+
+.trace-content {
+  display: grid;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.trace-empty {
+  margin: 0;
+  color: var(--muted);
+}
+
+.trace-group {
+  display: grid;
+  gap: 6px;
+}
+
+.trace-label {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.trace-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.trace-chip {
+  padding: 4px 7px;
+  border: 1px solid rgba(22, 134, 111, 0.22);
+  border-radius: 999px;
+  background: #edf6f2;
+  color: var(--accent-strong);
+}
+
+.trace-step {
+  display: grid;
+  gap: 6px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.trace-step-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.trace-step-status {
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
+.trace-json {
+  margin: 0;
+  max-height: 140px;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 8px;
+  background: #f6f8f6;
+  color: #33423d;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .chat-panel {

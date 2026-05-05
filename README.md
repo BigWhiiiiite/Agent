@@ -29,6 +29,7 @@
 - FastAPI 多轮 HTTP 接口
 - SSE 流式聊天接口
 - 内置简易聊天前端
+- 前端 Trace 面板，展示候选工具和工具调用过程
 - 同 session 并发请求保护
 - 短期 memory 裁剪，防止 messages 无限增长
 - Data Provider 抽象，便于替换真实数据源
@@ -76,6 +77,16 @@
 `app.py` 是 FastAPI HTTP 服务入口。
 
 `static/` 是简易聊天前端，直接调用当前 FastAPI 接口。
+
+前端左侧的 Trace 面板会展示最近一轮：
+
+```text
+候选工具 selected_tools
+停止原因 stop_reason
+实际工具调用 tool_calls
+工具参数 arguments
+工具结果摘要 result_summary
+```
 
 `eval_cases.json` 是评估用例。
 
@@ -779,7 +790,19 @@ static/ 提供简易聊天前端
 GET /health 用于健康检查
 POST /chat 用于外部系统或前端调用 Agent
 POST /chat/stream 用于前端流式显示 Agent 回答
+streaming done 事件会返回 trace，用于前端展示 Agent 过程
 session_store.py 用内存字典按 session_id 保存 messages，并用同 session 锁保护多轮上下文
+```
+
+### Agent 做了什么不够可见
+
+当前解法：
+
+```text
+core.py 每轮生成 trace
+tracing.py 写入 logs/agent_trace.jsonl
+/chat 和 /chat/stream 返回 trace
+static/ 前端用 Trace 面板展示候选工具、工具调用和结果摘要
 ```
 
 ### 同一个 session 同时来了多个请求

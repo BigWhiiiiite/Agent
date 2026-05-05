@@ -41,6 +41,7 @@ class ChatResponse(BaseModel):
     context: dict
     session_id: str
     message_count: int
+    trace: dict | None = None
 
 
 class SessionsResponse(BaseModel):
@@ -82,20 +83,23 @@ def index() -> FileResponse:
 @app.post("/chat")
 def chat(request: ChatRequest) -> ChatResponse:
     session_id, context = build_chat_context(request)
+    trace_holder = {}
 
     with use_session_messages(session_id, reset=request.reset) as messages:
         answer = run_agent(
             messages,
             request.message,
             debug=False,
-            context=context
+            context=context,
+            trace_callback=lambda trace: trace_holder.update({"trace": trace})
         )
 
         return ChatResponse(
             answer=answer,
             context=context,
             session_id=session_id,
-            message_count=len(messages)
+            message_count=len(messages),
+            trace=trace_holder.get("trace")
         )
 
 
@@ -105,12 +109,15 @@ def chat_stream(request: ChatRequest) -> StreamingResponse:
 
     def event_generator():
         try:
+            trace_holder = {}
+
             with use_session_messages(session_id, reset=request.reset) as messages:
                 for delta in run_agent_stream(
                     messages,
                     request.message,
                     debug=False,
-                    context=context
+                    context=context,
+                    trace_callback=lambda trace: trace_holder.update({"trace": trace})
                 ):
                     yield format_sse_event("delta", {"content": delta})
 
@@ -118,7 +125,8 @@ def chat_stream(request: ChatRequest) -> StreamingResponse:
                     "done",
                     {
                         "session_id": session_id,
-                        "message_count": len(messages)
+                        "message_count": len(messages),
+                        "trace": trace_holder.get("trace")
                     }
                 )
         except Exception as error:

@@ -52,6 +52,22 @@
           <button type="button" data-prompt="RAG为什么要切块？">RAG 切块</button>
         </div>
 
+        <section class="trace-panel" aria-label="Agent trace">
+          <div class="trace-header">
+            <h2>Trace</h2>
+            <button id="clear-trace" type="button" title="Clear trace">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3 6h18"></path>
+                <path d="M8 6V4h8v2"></path>
+                <path d="M19 6l-1 14H6L5 6"></path>
+              </svg>
+            </button>
+          </div>
+          <div class="trace-content" id="trace-content">
+            <p class="trace-empty">No trace</p>
+          </div>
+        </section>
+
         <button class="secondary-action" id="reset-session" type="button" title="Reset session">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M3 12a9 9 0 1 0 3-6.7"></path>

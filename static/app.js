@@ -8,6 +8,8 @@ const pageSelectEl = document.querySelector("#page-context");
 const resetButtonEl = document.querySelector("#reset-session");
 const statusPillEl = document.querySelector("#status-pill");
 const quickPromptEls = document.querySelectorAll("[data-prompt]");
+const traceContentEl = document.querySelector("#trace-content");
+const clearTraceEl = document.querySelector("#clear-trace");
 
 let isSending = false;
 
@@ -65,6 +67,81 @@ function createErrorMessage(content) {
   scrollToBottom();
 }
 
+function createTextElement(tagName, className, text) {
+  const element = document.createElement(tagName);
+  element.className = className;
+  element.textContent = text;
+  return element;
+}
+
+function createJsonBlock(value) {
+  const block = document.createElement("pre");
+  block.className = "trace-json";
+  block.textContent = JSON.stringify(value, null, 2);
+  return block;
+}
+
+function renderTrace(trace) {
+  traceContentEl.innerHTML = "";
+
+  if (!trace) {
+    traceContentEl.append(createTextElement("p", "trace-empty", "No trace"));
+    return;
+  }
+
+  const selectedToolsGroup = document.createElement("section");
+  selectedToolsGroup.className = "trace-group";
+  selectedToolsGroup.append(createTextElement("div", "trace-label", "Selected tools"));
+
+  const chips = document.createElement("div");
+  chips.className = "trace-chips";
+  const selectedTools = trace.selected_tools && trace.selected_tools.length
+    ? trace.selected_tools
+    : ["none"];
+
+  selectedTools.forEach((toolName) => {
+    chips.append(createTextElement("span", "trace-chip", toolName));
+  });
+
+  selectedToolsGroup.append(chips);
+  traceContentEl.append(selectedToolsGroup);
+
+  const metaGroup = document.createElement("section");
+  metaGroup.className = "trace-group";
+  metaGroup.append(createTextElement("div", "trace-label", "Stop reason"));
+  metaGroup.append(createTextElement("span", "trace-chip", trace.stop_reason || "unknown"));
+  traceContentEl.append(metaGroup);
+
+  const toolCallsGroup = document.createElement("section");
+  toolCallsGroup.className = "trace-group";
+  toolCallsGroup.append(createTextElement("div", "trace-label", "Tool calls"));
+
+  if (!trace.tool_calls || trace.tool_calls.length === 0) {
+    toolCallsGroup.append(createTextElement("p", "trace-empty", "No tool call"));
+  } else {
+    trace.tool_calls.forEach((toolCall, index) => {
+      const step = document.createElement("article");
+      step.className = "trace-step";
+
+      const title = document.createElement("div");
+      title.className = "trace-step-title";
+      title.append(createTextElement("span", "", `${index + 1}. ${toolCall.tool_name}`));
+
+      const ok = toolCall.result_summary && toolCall.result_summary.ok;
+      title.append(createTextElement("span", "trace-step-status", ok ? "ok" : "error"));
+
+      step.append(title);
+      step.append(createTextElement("div", "trace-label", "Arguments"));
+      step.append(createJsonBlock(toolCall.arguments || {}));
+      step.append(createTextElement("div", "trace-label", "Result"));
+      step.append(createJsonBlock(toolCall.result_summary || {}));
+      toolCallsGroup.append(step);
+    });
+  }
+
+  traceContentEl.append(toolCallsGroup);
+}
+
 function buildPayload(message, reset = false) {
   return {
     session_id: sessionInputEl.value.trim() || "default",
@@ -99,6 +176,7 @@ async function readStream(response, assistantBubble) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder("utf-8");
   let buffer = "";
+  let doneData = null;
 
   while (true) {
     const { value, done } = await reader.read();
@@ -126,8 +204,14 @@ async function readStream(response, assistantBubble) {
       if (parsed.event === "error") {
         throw new Error(parsed.data.message);
       }
+
+      if (parsed.event === "done") {
+        doneData = parsed.data;
+      }
     }
   }
+
+  return doneData;
 }
 
 async function sendMessage(message) {
@@ -156,12 +240,13 @@ async function sendMessage(message) {
       throw new Error(`HTTP ${response.status}`);
     }
 
-    await readStream(response, assistantBubble);
+    const doneData = await readStream(response, assistantBubble);
 
     if (!assistantBubble.textContent.trim()) {
       assistantBubble.textContent = "没有返回内容。";
     }
 
+    renderTrace(doneData ? doneData.trace : null);
     setStatus("Ready");
   } catch (error) {
     assistantBubble.closest(".message").remove();
@@ -203,6 +288,7 @@ resetButtonEl.addEventListener("click", async () => {
     });
 
     messagesEl.innerHTML = "";
+    renderTrace(null);
     createMessage(
       "assistant",
       "你好，我可以查询老师时间、课程信息，也可以回答知识库里的制度和 Agent 学习问题。"
@@ -212,4 +298,8 @@ resetButtonEl.addEventListener("click", async () => {
     createErrorMessage(error.message);
     setStatus("Error", "error");
   }
+});
+
+clearTraceEl.addEventListener("click", () => {
+  renderTrace(null);
 });
