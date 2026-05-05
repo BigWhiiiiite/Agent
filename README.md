@@ -30,6 +30,7 @@
 - SSE 流式聊天接口
 - 同 session 并发请求保护
 - 短期 memory 裁剪，防止 messages 无限增长
+- Data Provider 抽象，便于替换真实数据源
 - Eval 测试集
 
 ## 文件结构
@@ -40,6 +41,7 @@
 │   ├── __init__.py
 │   ├── config.py
 │   ├── core.py
+│   ├── data_store.py
 │   ├── debug.py
 │   ├── executor.py
 │   ├── llm.py
@@ -72,13 +74,14 @@
 
 `scripts/run_eval.py` 会运行本地 eval，不调用 LLM，不消耗 API。
 
-`data/` 是结构化业务数据，课程和老师时间工具会从这里读取数据。
+`data/` 是结构化业务数据。当前由 `JsonDataProvider` 读取，未来可以替换成数据库或外部 API。
 
 `agent/` 是 Agent 核心代码：
 
 ```text
 config.py    配置项，比如模型名、缓存路径、TOP_K
 core.py      Agent loop、流式 Agent loop 和初始 messages
+data_store.py  Data Provider，目前从 JSON 读取业务数据
 debug.py     messages 和 tool trace 打印
 executor.py  工具执行器，负责执行 tool_call 和错误包装
 llm.py       OpenAI 普通模型调用和流式模型调用
@@ -265,6 +268,7 @@ python3 scripts/run_eval.py
 Tool Router 是否选出预期候选工具
 关键词 RAG 是否命中预期 chunk
 结构化数据工具是否返回预期字段
+工具是否能通过 Data Provider 替换数据源
 memory 裁剪是否保留完整最近轮次
 streaming 是否能拼回最终回答
 同 session 并发请求是否串行执行
@@ -277,7 +281,7 @@ streaming 是否能拼回最终回答
 ```text
 [PASS] router_teacher_schedule
 [PASS] rag_leave_policy
-Passed 14/14 eval cases.
+Passed 15/15 eval cases.
 ```
 
 ## 当前工具
@@ -313,6 +317,45 @@ data/courses.json
 ```text
 Agent开发入门这门课在哪里上？
 ```
+
+## Data Provider
+
+结构化业务数据现在统一从 `data_store.py` 进入。
+
+当前实现是：
+
+```text
+query_teacher_schedule 工具
+-> get_data_provider()
+-> JsonDataProvider
+-> data/teacher_schedule.json
+```
+
+课程查询也是类似：
+
+```text
+query_course_info 工具
+-> get_data_provider()
+-> JsonDataProvider
+-> data/courses.json
+```
+
+这样做的目的不是为了多写一层，而是把两个职责拆开：
+
+```text
+tools.py 负责定义 Agent 能调用什么工具
+data_store.py 负责决定业务数据从哪里来
+```
+
+所以现在 demo 仍然读 JSON。以后如果要落地，可以新增一个数据库版 provider：
+
+```text
+DatabaseDataProvider
+-> get_teacher_schedule()
+-> get_course_info()
+```
+
+只要方法返回的数据结构保持一致，`query_teacher_schedule` 和 `query_course_info` 的工具 schema、Agent loop、LLM 工具调用流程都不用大改。
 
 ### search_knowledge_base
 
@@ -698,8 +741,19 @@ vector_index.json 缓存 chunk + embedding + metadata
 
 ```text
 eval_cases.json 固化典型问题和预期结果
-scripts/run_eval.py 检查 Tool Router、关键词 RAG、结构化数据工具、memory 裁剪、streaming 和 session lock
+scripts/run_eval.py 检查 Tool Router、关键词 RAG、结构化数据工具、Data Provider、memory 裁剪、streaming 和 session lock
 第一版 eval 不依赖 LLM，保证便宜、稳定、可重复
+```
+
+### 教学数据未来要替换成真实业务数据
+
+当前解法：
+
+```text
+data_store.py 提供 Data Provider 抽象
+当前 JsonDataProvider 读取 data/*.json
+工具函数通过 get_data_provider 获取数据
+未来可替换为数据库、教务系统 API 或其他业务服务
 ```
 
 ### Agent 只能在命令行使用
@@ -752,6 +806,6 @@ MAX_CONTEXT_MESSAGES 控制最大 message 数量
 
 - 接入真正的向量数据库
 - 增加 LLM 工具选择 eval
-- 把 fake_db 替换成真实数据库或外部 API
+- 增加数据库版或外部 API 版 Data Provider
 
 现在项目已经从单文件教学版，升级成了按职责拆分的应用版结构。

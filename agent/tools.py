@@ -1,29 +1,15 @@
-from agent.data_store import load_courses, load_teacher_schedule
+from agent.data_store import get_data_provider
 from agent.rag import search_knowledge_base, semantic_search_knowledge_base
 
 
 def query_teacher_schedule(teacher_name: str, date: str) -> dict:
-    schedules = load_teacher_schedule()
-    slots = []
-
-    for schedule in schedules:
-        if (
-            schedule["teacher_name"] == teacher_name
-            and schedule["date"] == date
-        ):
-            slots = schedule["available_slots"]
-            break
-
-    return {
-        "teacher_name": teacher_name,
-        "date": date,
-        "available_slots": slots
-    }
+    provider = get_data_provider()
+    return provider.get_teacher_schedule(teacher_name, date)
 
 
 def query_course_info(course_name: str) -> dict:
-    courses = load_courses()
-    course_info = courses.get(course_name)
+    provider = get_data_provider()
+    course_info = provider.get_course_info(course_name)
 
     if course_info is None:
         return {

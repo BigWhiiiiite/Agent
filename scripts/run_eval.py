@@ -9,6 +9,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
 import agent.core as agent_core
+import agent.data_store as data_store
 from agent.llm import append_tool_call_delta, build_streamed_assistant_message
 from agent.memory import trim_messages
 from agent.rag import search_knowledge_base
@@ -72,6 +73,49 @@ def evaluate_data_tool_case(case: dict) -> dict:
         "passed": actual_fields == expected_fields,
         "expected": expected_fields,
         "actual": actual_fields
+    }
+
+
+def evaluate_data_provider_case(case: dict) -> dict:
+    original_provider = data_store.get_data_provider()
+
+    class FakeDataProvider:
+        def get_teacher_schedule(self, teacher_name: str, date: str) -> dict:
+            return {
+                "teacher_name": teacher_name,
+                "date": date,
+                "available_slots": case["expected_schedule_slots"]
+            }
+
+        def get_course_info(self, course_name: str) -> dict:
+            return {
+                "teacher": case["expected_course_teacher"],
+                "time": "周一 09:00",
+                "classroom": "T101",
+                "description": "测试课程"
+            }
+
+    try:
+        data_store.set_data_provider(FakeDataProvider())
+        schedule_result = TOOL_REGISTRY["query_teacher_schedule"]("任意老师", "任意日期")
+        course_result = TOOL_REGISTRY["query_course_info"]("任意课程")
+    finally:
+        data_store.set_data_provider(original_provider)
+
+    actual = {
+        "schedule_slots": schedule_result["available_slots"],
+        "course_teacher": course_result["teacher"]
+    }
+    expected = {
+        "schedule_slots": case["expected_schedule_slots"],
+        "course_teacher": case["expected_course_teacher"]
+    }
+
+    return {
+        "id": case["id"],
+        "passed": actual == expected,
+        "expected": expected,
+        "actual": actual
     }
 
 
@@ -271,6 +315,9 @@ def evaluate_case(case: dict) -> dict:
 
     if case["type"] == "data_tool":
         return evaluate_data_tool_case(case)
+
+    if case["type"] == "data_provider":
+        return evaluate_data_provider_case(case)
 
     if case["type"] == "memory":
         return evaluate_memory_case(case)

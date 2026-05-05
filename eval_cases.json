@@ -99,6 +99,12 @@
     }
   },
   {
+    "id": "data_provider_injection",
+    "type": "data_provider",
+    "expected_schedule_slots": ["09:00"],
+    "expected_course_teacher": "测试老师"
+  },
+  {
     "id": "memory_keep_complete_recent_turns",
     "type": "memory",
     "max_messages": 7,
