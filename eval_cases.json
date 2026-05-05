@@ -124,6 +124,7 @@
       "第三轮问题"
     ],
     "expected_summary_contains": [
+      "LLM摘要",
       "第一轮问题"
     ]
   },

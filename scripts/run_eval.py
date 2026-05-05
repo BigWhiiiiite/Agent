@@ -148,10 +148,19 @@ def build_sample_memory_messages() -> list:
 
 def evaluate_memory_case(case: dict) -> dict:
     messages = build_sample_memory_messages()
+
+    def fake_summary_builder(
+        previous_summary: str,
+        removed_turns: list[list],
+        max_chars: int
+    ) -> str:
+        return "LLM摘要：第一轮问题已经讨论过，后续问题可能会引用这段历史。"
+
     trim_messages(
         messages,
         max_messages=case["max_messages"],
-        max_recent_turns=case["max_recent_turns"]
+        max_recent_turns=case["max_recent_turns"],
+        summary_builder=fake_summary_builder
     )
 
     actual_roles = [

@@ -542,11 +542,11 @@ HTTP API 支持 `session_id` 后，同一个用户的 `messages` 会不断变长
 很早以前的历史可能干扰当前问题
 ```
 
-所以当前项目加了一个教学版 summary memory：
+所以当前项目加了一个教学版 LLM summary memory：
 
 ```text
 保留 system message
-旧历史压缩成一条“对话摘要”
+旧历史交给 LLM 压缩成一条“对话摘要”
 优先保留最近几轮完整原文
 默认最多保留 MAX_CONTEXT_MESSAGES = 24 条 message
 ```
@@ -561,7 +561,7 @@ assistant tool_calls
 
 如果只保留其中一半，模型会看到不完整的工具调用历史，可能导致 API 报错或回答混乱。
 
-所以 `memory.py` 会按“用户一轮问题 + 后续 assistant/tool 消息”作为一个整体来处理。超过上限时，较早的完整 turn 会被合并进 summary，最近的 turn 继续保留原文。
+所以 `memory.py` 会按“用户一轮问题 + 后续 assistant/tool 消息”作为一个整体来处理。超过上限时，较早的完整 turn 会交给 `llm.py` 里的 memory summarizer 合并进 summary，最近的 turn 继续保留原文。如果总结调用失败，会退回到规则版摘要，避免整个聊天流程中断。
 
 ## 工具执行结果
 
@@ -835,7 +835,7 @@ app.py 提供 /chat/stream SSE 接口
 
 ```text
 memory.py 在调用模型前后压缩 messages
-旧历史合并成“对话摘要”
+旧历史优先用 LLM 合并成“对话摘要”
 最近 MAX_RECENT_TURNS 轮保留完整原文
 MAX_CONTEXT_MESSAGES 控制最大 message 数量
 ```

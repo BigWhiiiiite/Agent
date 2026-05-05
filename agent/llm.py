@@ -3,6 +3,42 @@ from openai import OpenAI
 from agent.config import MODEL_NAME
 
 
+def format_message_for_memory(message: dict) -> str:
+    role = message.get("role", "")
+    content = message.get("content")
+
+    if content:
+        return f"{role}: {content}"
+
+    tool_calls = message.get("tool_calls", [])
+
+    if tool_calls:
+        tool_names = [
+            tool_call.get("function", {}).get("name", "")
+            for tool_call in tool_calls
+        ]
+        tool_names = [
+            tool_name
+            for tool_name in tool_names
+            if tool_name
+        ]
+        return f"{role}: 调用了工具 {', '.join(tool_names)}"
+
+    return f"{role}:"
+
+
+def format_turns_for_memory(turns: list[list]) -> str:
+    lines = []
+
+    for index, turn in enumerate(turns, start=1):
+        lines.append(f"第 {index} 轮：")
+
+        for message in turn:
+            lines.append(format_message_for_memory(message))
+
+    return "\n".join(lines)
+
+
 def build_completion_kwargs(messages: list, tools: list) -> dict:
     kwargs = {
         "model": MODEL_NAME,
@@ -24,6 +60,42 @@ def call_llm(messages: list, tools: list) -> dict:
 
     assistant_message = response.choices[0].message
     return assistant_message.model_dump(exclude_none=True)
+
+
+def summarize_memory_with_llm(
+    previous_summary: str,
+    removed_turns: list[list],
+    max_chars: int
+) -> str:
+    transcript = format_turns_for_memory(removed_turns)
+    client = OpenAI()
+    response = client.chat.completions.create(
+        model=MODEL_NAME,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "你是一个 Agent 的对话记忆整理器。"
+                    "你的任务是把较早的对话压缩成一段简短摘要，"
+                    "帮助后续 LLM 理解用户当前问题的上下文。"
+                    "只保留对未来回答可能有用的信息：用户需求、偏好、已确认事实、"
+                    "重要实体、工具查询结果、未完成事项。"
+                    "不要编造原对话里没有的信息。"
+                )
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"已有摘要：\n{previous_summary or '无'}\n\n"
+                    f"需要压缩的旧对话：\n{transcript}\n\n"
+                    f"请输出一段不超过 {max_chars} 字的中文摘要。"
+                    "直接输出摘要正文，不要写标题。"
+                )
+            }
+        ]
+    )
+
+    return response.choices[0].message.content or ""
 
 
 def append_tool_call_delta(tool_calls_by_index: dict, tool_call_delta: dict) -> None:

@@ -1,7 +1,7 @@
 from agent.config import MAX_AGENT_STEPS
 from agent.debug import print_messages, print_tool_trace
 from agent.executor import execute_tool_call
-from agent.llm import call_llm, stream_llm
+from agent.llm import call_llm, stream_llm, summarize_memory_with_llm
 from agent.memory import trim_messages
 from agent.router import DEFAULT_CONTEXT, select_tools
 from agent.tracing import append_tool_call_trace, create_trace, finish_trace
@@ -43,7 +43,10 @@ def run_agent(
         "role": "user",
         "content": user_input
     })
-    trimmed_count = trim_messages(messages)
+    trimmed_count = trim_messages(
+        messages,
+        summary_builder=summarize_memory_with_llm
+    )
 
     if debug:
         if trimmed_count:
@@ -52,7 +55,10 @@ def run_agent(
         print(f"\n本轮候选工具：{selected_tool_names}")
 
     for _ in range(MAX_AGENT_STEPS):
-        trimmed_count = trim_messages(messages)
+        trimmed_count = trim_messages(
+            messages,
+            summary_builder=summarize_memory_with_llm
+        )
         if debug and trimmed_count:
             print(f"\n已裁剪较早的 {trimmed_count} 条 messages")
 
@@ -64,7 +70,7 @@ def run_agent(
 
         if "tool_calls" not in assistant_message:
             final_answer = assistant_message["content"]
-            trim_messages(messages)
+            trim_messages(messages, summary_builder=summarize_memory_with_llm)
             finish_trace(trace, final_answer, "final_answer")
             if trace_callback:
                 trace_callback(trace)
@@ -82,7 +88,7 @@ def run_agent(
             print_messages("工具执行完成并加入 tool message 后", messages)
 
     final_answer = "工具调用轮数超过上限，已停止。请换一种问法或稍后再试。"
-    trim_messages(messages)
+    trim_messages(messages, summary_builder=summarize_memory_with_llm)
     finish_trace(trace, final_answer, "max_steps")
     if trace_callback:
         trace_callback(trace)
@@ -105,7 +111,10 @@ def run_agent_stream(
         "role": "user",
         "content": user_input
     })
-    trimmed_count = trim_messages(messages)
+    trimmed_count = trim_messages(
+        messages,
+        summary_builder=summarize_memory_with_llm
+    )
 
     if debug:
         if trimmed_count:
@@ -114,7 +123,10 @@ def run_agent_stream(
         print(f"\n本轮候选工具：{selected_tool_names}")
 
     for _ in range(MAX_AGENT_STEPS):
-        trimmed_count = trim_messages(messages)
+        trimmed_count = trim_messages(
+            messages,
+            summary_builder=summarize_memory_with_llm
+        )
         if debug and trimmed_count:
             print(f"\n已裁剪较早的 {trimmed_count} 条 messages")
 
@@ -140,7 +152,7 @@ def run_agent_stream(
 
         if "tool_calls" not in assistant_message:
             final_answer = assistant_message.get("content", "")
-            trim_messages(messages)
+            trim_messages(messages, summary_builder=summarize_memory_with_llm)
             finish_trace(trace, final_answer, "final_answer")
             if trace_callback:
                 trace_callback(trace)
@@ -158,7 +170,7 @@ def run_agent_stream(
             print_messages("工具执行完成并加入 tool message 后", messages)
 
     final_answer = "工具调用轮数超过上限，已停止。请换一种问法或稍后再试。"
-    trim_messages(messages)
+    trim_messages(messages, summary_builder=summarize_memory_with_llm)
     finish_trace(trace, final_answer, "max_steps")
     if trace_callback:
         trace_callback(trace)

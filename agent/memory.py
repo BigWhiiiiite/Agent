@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 from agent.config import (
     MAX_CONTEXT_MESSAGES,
     MAX_RECENT_TURNS,
@@ -6,6 +8,7 @@ from agent.config import (
 
 
 SUMMARY_PREFIX = "对话摘要："
+SummaryBuilder = Callable[[str, list[list], int], str]
 
 
 def is_summary_message(message: dict) -> bool:
@@ -108,16 +111,23 @@ def build_rule_summary(turns: list[list]) -> str:
     return "。".join(summary_parts)
 
 
-def build_summary_message(
-    previous_summary_message: dict | None,
+def normalize_summary_text(summary_text: str) -> str:
+    summary_text = str(summary_text).strip()
+    summary_text = summary_text.removeprefix(SUMMARY_PREFIX).strip()
+    return summary_text
+
+
+def clip_summary_text(summary_text: str) -> str:
+    if len(summary_text) <= MAX_SUMMARY_CHARS:
+        return summary_text
+
+    return summary_text[-MAX_SUMMARY_CHARS:]
+
+
+def build_fallback_summary_text(
+    previous_summary: str,
     removed_turns: list[list]
-) -> dict | None:
-    previous_summary = ""
-
-    if previous_summary_message:
-        previous_summary = previous_summary_message.get("content", "")
-        previous_summary = previous_summary.removeprefix(SUMMARY_PREFIX).strip()
-
+) -> str:
     new_summary = build_rule_summary(removed_turns)
     summary_parts = [
         part
@@ -125,18 +135,54 @@ def build_summary_message(
         if part
     ]
 
-    if not summary_parts:
+    return "。".join(summary_parts)
+
+
+def build_summary_text(
+    previous_summary: str,
+    removed_turns: list[list],
+    summary_builder: SummaryBuilder | None = None
+) -> str:
+    if summary_builder:
+        try:
+            llm_summary = summary_builder(
+                previous_summary,
+                removed_turns,
+                MAX_SUMMARY_CHARS
+            )
+            llm_summary = normalize_summary_text(llm_summary)
+
+            if llm_summary:
+                return llm_summary
+        except Exception:
+            pass
+
+    return build_fallback_summary_text(previous_summary, removed_turns)
+
+
+def build_summary_message(
+    previous_summary_message: dict | None,
+    removed_turns: list[list],
+    summary_builder: SummaryBuilder | None = None
+) -> dict | None:
+    previous_summary = ""
+
+    if previous_summary_message:
+        previous_summary = previous_summary_message.get("content", "")
+        previous_summary = normalize_summary_text(previous_summary)
+
+    summary_text = build_summary_text(
+        previous_summary,
+        removed_turns,
+        summary_builder
+    )
+
+    if not summary_text:
         return None
-
-    summary_content = SUMMARY_PREFIX + " " + "。".join(summary_parts)
-
-    if len(summary_content) > MAX_SUMMARY_CHARS:
-        keep_chars = MAX_SUMMARY_CHARS - len(SUMMARY_PREFIX) - 1
-        summary_content = SUMMARY_PREFIX + " " + summary_content[-keep_chars:]
 
     return {
         "role": "system",
-        "content": summary_content
+        "content": SUMMARY_PREFIX + " " + clip_summary_text(summary_text)
     }
 
 
@@ -151,7 +197,8 @@ def flatten_turns(turns: list[list]) -> list:
 def trim_messages(
     messages: list,
     max_messages: int = MAX_CONTEXT_MESSAGES,
-    max_recent_turns: int = MAX_RECENT_TURNS
+    max_recent_turns: int = MAX_RECENT_TURNS,
+    summary_builder: SummaryBuilder | None = None
 ) -> int:
     if len(messages) <= max_messages:
         return 0
@@ -164,17 +211,26 @@ def trim_messages(
     previous_summary_message = summary_message
     removed_turns = turns[:-max_recent_turns]
     kept_turns = turns[-max_recent_turns:]
-    summary_message = build_summary_message(previous_summary_message, removed_turns)
 
-    def build_new_messages() -> list:
-        summary_messages = [summary_message] if summary_message else []
-        return system_messages + summary_messages + flatten_turns(kept_turns)
+    def estimate_new_message_count() -> int:
+        summary_count = 1 if previous_summary_message or removed_turns else 0
+        return (
+            len(system_messages)
+            + summary_count
+            + len(flatten_turns(kept_turns))
+        )
 
-    while len(kept_turns) > 1 and len(build_new_messages()) > max_messages:
+    while len(kept_turns) > 1 and estimate_new_message_count() > max_messages:
         removed_turns.append(kept_turns.pop(0))
-        summary_message = build_summary_message(previous_summary_message, removed_turns)
+
+    summary_message = build_summary_message(
+        previous_summary_message,
+        removed_turns,
+        summary_builder
+    )
 
     removed_message_count = len(flatten_turns(removed_turns))
-    messages[:] = build_new_messages()
+    summary_messages = [summary_message] if summary_message else []
+    messages[:] = system_messages + summary_messages + flatten_turns(kept_turns)
 
     return removed_message_count
