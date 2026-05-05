@@ -1,3 +1,5 @@
+import json
+
 from openai import OpenAI
 
 from agent.config import MODEL_NAME
@@ -60,6 +62,50 @@ def call_llm(messages: list, tools: list) -> dict:
 
     assistant_message = response.choices[0].message
     return assistant_message.model_dump(exclude_none=True)
+
+
+def choose_tool_names_with_llm(
+    user_input: str,
+    context: dict,
+    tool_catalog: list[dict]
+) -> list[str]:
+    client = OpenAI()
+    response = client.chat.completions.create(
+        model=MODEL_NAME,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "你是一个 Agent 的工具选择器。"
+                    "你只能根据工具名和一句话说明，判断当前问题可能需要哪些工具。"
+                    "如果用户问题不需要工具，返回空数组。"
+                    "不要编造工具名。"
+                )
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"用户问题：{user_input}\n"
+                    f"当前上下文：{json.dumps(context, ensure_ascii=False)}\n"
+                    f"候选工具清单：{json.dumps(tool_catalog, ensure_ascii=False)}\n\n"
+                    "请只输出 JSON，格式为："
+                    "{\"tool_names\":[\"工具名1\",\"工具名2\"]}"
+                )
+            }
+        ]
+    )
+    content = response.choices[0].message.content or "{}"
+    payload = json.loads(content)
+    tool_names = payload.get("tool_names", [])
+
+    if not isinstance(tool_names, list):
+        return []
+
+    return [
+        tool_name
+        for tool_name in tool_names
+        if isinstance(tool_name, str)
+    ]
 
 
 def summarize_memory_with_llm(

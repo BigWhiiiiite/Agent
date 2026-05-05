@@ -1,4 +1,6 @@
-from agent.tools import TOOL_METADATA, TOOLS
+from agent.config import TOOL_SELECTOR_MIN_TOOLS, USE_LLM_TOOL_SELECTOR
+from agent.llm import choose_tool_names_with_llm
+from agent.tools import TOOL_METADATA
 
 
 DEFAULT_CONTEXT = {
@@ -60,6 +62,29 @@ def filter_tools_by_intent(tool_names: list, intents: list) -> list:
     return matched_tools or tool_names
 
 
+def build_tool_catalog(tool_names: list) -> list:
+    return [
+        {
+            "name": tool_name,
+            "summary": TOOL_METADATA[tool_name]["summary"]
+        }
+        for tool_name in tool_names
+    ]
+
+
+def filter_selected_tool_names(
+    candidate_tool_names: list,
+    selected_tool_names: list
+) -> list:
+    selected_set = set(selected_tool_names)
+
+    return [
+        tool_name
+        for tool_name in candidate_tool_names
+        if tool_name in selected_set
+    ]
+
+
 def select_tool_names(user_input: str, context: dict | None = None) -> list:
     normalized_context = normalize_context(context)
     tool_names = list(TOOL_METADATA.keys())
@@ -70,11 +95,39 @@ def select_tool_names(user_input: str, context: dict | None = None) -> list:
     return tool_names
 
 
-def select_tools(user_input: str, context: dict | None = None) -> list:
-    tool_names = select_tool_names(user_input, context)
-    selected_tools = [
+def select_tool_names_with_llm(
+    user_input: str,
+    context: dict | None = None
+) -> list:
+    candidate_tool_names = select_tool_names(user_input, context)
+    normalized_context = normalize_context(context)
+
+    if (
+        not USE_LLM_TOOL_SELECTOR
+        or len(candidate_tool_names) <= TOOL_SELECTOR_MIN_TOOLS
+    ):
+        return candidate_tool_names
+
+    try:
+        selected_tool_names = choose_tool_names_with_llm(
+            user_input,
+            normalized_context,
+            build_tool_catalog(candidate_tool_names)
+        )
+    except Exception:
+        return candidate_tool_names
+
+    return filter_selected_tool_names(candidate_tool_names, selected_tool_names)
+
+
+def get_tool_schemas(tool_names: list) -> list:
+    return [
         TOOL_METADATA[tool_name]["schema"]
         for tool_name in tool_names
     ]
 
-    return selected_tools or TOOLS
+
+def select_tools(user_input: str, context: dict | None = None) -> list:
+    tool_names = select_tool_names_with_llm(user_input, context)
+
+    return get_tool_schemas(tool_names)

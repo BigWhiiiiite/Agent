@@ -115,6 +115,7 @@ TOOLS = [
 TOOL_METADATA = {
     "query_teacher_schedule": {
         "schema": TEACHER_SCHEDULE_TOOL_SCHEMA,
+        "summary": "查询老师在某天的空闲时间。",
         "intents": ["teacher_schedule"],
         "allowed_roles": ["student", "teacher", "admin"],
         "pages": ["general", "teacher"],
@@ -122,6 +123,7 @@ TOOL_METADATA = {
     },
     "query_course_info": {
         "schema": COURSE_TOOL_SCHEMA,
+        "summary": "查询课程老师、时间、教室和课程介绍。",
         "intents": ["course_info"],
         "allowed_roles": ["student", "teacher", "admin"],
         "pages": ["general", "course"],
@@ -129,6 +131,7 @@ TOOL_METADATA = {
     },
     "search_knowledge_base": {
         "schema": KNOWLEDGE_BASE_TOOL_SCHEMA,
+        "summary": "用关键词搜索本地知识库资料。",
         "intents": ["knowledge_base", "agent_learning"],
         "allowed_roles": ["student", "teacher", "admin"],
         "pages": ["general", "knowledge_base", "course"],
@@ -136,6 +139,7 @@ TOOL_METADATA = {
     },
     "semantic_search_knowledge_base": {
         "schema": SEMANTIC_KNOWLEDGE_BASE_TOOL_SCHEMA,
+        "summary": "用 embedding 语义检索本地知识库。",
         "intents": ["knowledge_base", "agent_learning"],
         "allowed_roles": ["student", "teacher", "admin"],
         "pages": ["general", "knowledge_base", "course"],

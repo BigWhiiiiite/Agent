@@ -10,6 +10,7 @@ sys.path.insert(0, str(ROOT_DIR))
 
 import agent.core as agent_core
 import agent.data_store as data_store
+import agent.router as router_module
 from agent.llm import append_tool_call_delta, build_streamed_assistant_message
 from agent.memory import SUMMARY_PREFIX, trim_messages
 from agent.rag import search_knowledge_base
@@ -37,6 +38,41 @@ def evaluate_router_case(case: dict) -> dict:
         "passed": actual_tools == expected_tools,
         "expected": expected_tools,
         "actual": actual_tools
+    }
+
+
+def evaluate_tool_selector_case(case: dict) -> dict:
+    original_selector = router_module.choose_tool_names_with_llm
+    original_enabled = router_module.USE_LLM_TOOL_SELECTOR
+    original_min_tools = router_module.TOOL_SELECTOR_MIN_TOOLS
+
+    def fake_tool_selector(
+        user_input: str,
+        context: dict,
+        tool_catalog: list[dict]
+    ) -> list:
+        return case["llm_selected_tools"]
+
+    try:
+        router_module.choose_tool_names_with_llm = fake_tool_selector
+        router_module.USE_LLM_TOOL_SELECTOR = True
+        router_module.TOOL_SELECTOR_MIN_TOOLS = 1
+        actual_tool_names = router_module.select_tool_names_with_llm(
+            case["question"],
+            case.get("context")
+        )
+    finally:
+        router_module.choose_tool_names_with_llm = original_selector
+        router_module.USE_LLM_TOOL_SELECTOR = original_enabled
+        router_module.TOOL_SELECTOR_MIN_TOOLS = original_min_tools
+
+    expected_tool_names = case["expected_tools"]
+
+    return {
+        "id": case["id"],
+        "passed": actual_tool_names == expected_tool_names,
+        "expected": expected_tool_names,
+        "actual": actual_tool_names
     }
 
 
@@ -233,6 +269,7 @@ def evaluate_memory_case(case: dict) -> dict:
 def evaluate_streaming_case(case: dict) -> dict:
     messages = agent_core.create_initial_messages()
     original_stream_llm = agent_core.stream_llm
+    original_select_tools = agent_core.select_tools
 
     def fake_stream_llm(messages: list, tools: list):
         for chunk in case["expected_chunks"]:
@@ -251,6 +288,7 @@ def evaluate_streaming_case(case: dict) -> dict:
 
     try:
         agent_core.stream_llm = fake_stream_llm
+        agent_core.select_tools = lambda user_input, context=None: []
         trace_holder = {}
         chunks = list(
             agent_core.run_agent_stream(
@@ -265,6 +303,7 @@ def evaluate_streaming_case(case: dict) -> dict:
         )
     finally:
         agent_core.stream_llm = original_stream_llm
+        agent_core.select_tools = original_select_tools
 
     actual = {
         "chunks": chunks,
@@ -368,6 +407,9 @@ def evaluate_session_lock_case(case: dict) -> dict:
 def evaluate_case(case: dict) -> dict:
     if case["type"] == "router":
         return evaluate_router_case(case)
+
+    if case["type"] == "tool_selector":
+        return evaluate_tool_selector_case(case)
 
     if case["type"] == "keyword_rag":
         return evaluate_keyword_rag_case(case)

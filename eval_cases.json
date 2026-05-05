@@ -56,6 +56,31 @@
     "expected_tools": ["query_course_info"]
   },
   {
+    "id": "tool_selector_no_tool_for_greeting",
+    "type": "tool_selector",
+    "question": "你好，今天心情不错",
+    "context": {
+      "user_role": "student",
+      "page": "general"
+    },
+    "llm_selected_tools": [],
+    "expected_tools": []
+  },
+  {
+    "id": "tool_selector_filters_invalid_names",
+    "type": "tool_selector",
+    "question": "我想了解学校请假制度",
+    "context": {
+      "user_role": "student",
+      "page": "general"
+    },
+    "llm_selected_tools": [
+      "semantic_search_knowledge_base",
+      "unknown_tool"
+    ],
+    "expected_tools": ["semantic_search_knowledge_base"]
+  },
+  {
     "id": "rag_leave_policy",
     "type": "keyword_rag",
     "question": "请假制度是什么？",

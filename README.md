@@ -159,6 +159,8 @@ export MAX_CONTEXT_MESSAGES="24"
 export MAX_CONTEXT_CHARS="8000"
 export MAX_RECENT_TURNS="4"
 export MAX_SUMMARY_CHARS="600"
+export USE_LLM_TOOL_SELECTOR="true"
+export TOOL_SELECTOR_MIN_TOOLS="3"
 ```
 
 ## 运行
@@ -616,12 +618,13 @@ assistant tool_calls
 
 所以项目里增加了 `agent/router.py`。
 
-当前路由分三层：
+当前路由分四层：
 
 ```text
 1. 权限过滤：根据 user_role 判断用户能不能用某类工具
 2. 场景过滤：根据 page 判断当前页面适合哪些工具
 3. 意图过滤：根据用户问题判断本轮更可能需要哪些工具
+4. LLM 工具预选：如果候选工具仍然很多，只给模型工具名和一句话简介，让它挑选少数工具
 ```
 
 命令行入口里默认 context 是：
@@ -638,8 +641,10 @@ context = {
 ```text
 用户问题 + 产品上下文
 -> select_tools()
--> 候选工具列表
--> LLM 在候选工具中选择是否调用
+-> 规则过滤出候选工具名
+-> 候选工具很多时，LLM selector 看轻量工具清单
+-> 只把最终选中的完整 tool schema 交给主 Agent LLM
+-> 主 Agent LLM 判断是否真的调用工具
 ```
 
 后续可以把 `detect_intents()` 替换成：
@@ -655,6 +660,7 @@ embedding-based tool retrieval
 ```text
 权限类规则必须由程序侧硬控制，不能完全交给模型。
 意图路由可以先用规则实现，后续替换为 LLM router 或语义工具检索。
+工具很多时，不要一次性把所有完整 schema 都塞给主模型，可以先做轻量工具预选。
 ```
 
 ## Agent Trace
@@ -705,6 +711,22 @@ LLM 是否调用了正确工具
 RAG 是否搜到正确资料
 最终回答是否基于工具结果
 ```
+
+## Prompt Cache
+
+Claude Code 这类工具会非常重视“稳定的提示词前缀”。原因是：
+
+```text
+system prompt
+基础工具清单
+固定规则说明
+```
+
+这些内容对很多用户、很多请求都一样。模型服务商可以缓存这段相同前缀，后续请求复用缓存，从而减少重复处理，降低延迟和成本。
+
+这不是 Agent memory。memory 是某个 session 的历史上下文；prompt cache 是模型服务侧对相同 prompt prefix 的性能优化，不应该包含用户私有对话。
+
+所以真实项目里会尽量让基础 system prompt、工具顺序、工具说明保持稳定。频繁改动这些内容会降低 cache 命中率。
 
 ## 实际应用问题和当前解法
 
