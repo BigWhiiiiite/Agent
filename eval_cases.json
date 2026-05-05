@@ -107,8 +107,10 @@
   {
     "id": "memory_keep_complete_recent_turns",
     "type": "memory",
-    "max_messages": 7,
+    "max_messages": 8,
+    "max_recent_turns": 2,
     "expected_roles": [
+      "system",
       "system",
       "user",
       "assistant",
@@ -120,6 +122,9 @@
     "expected_user_messages": [
       "第二轮问题",
       "第三轮问题"
+    ],
+    "expected_summary_contains": [
+      "第一轮问题"
     ]
   },
   {

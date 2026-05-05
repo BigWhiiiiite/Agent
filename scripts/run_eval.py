@@ -11,7 +11,7 @@ sys.path.insert(0, str(ROOT_DIR))
 import agent.core as agent_core
 import agent.data_store as data_store
 from agent.llm import append_tool_call_delta, build_streamed_assistant_message
-from agent.memory import trim_messages
+from agent.memory import SUMMARY_PREFIX, trim_messages
 from agent.rag import search_knowledge_base
 from agent.router import select_tool_names
 from agent.session_store import use_session_messages
@@ -148,7 +148,11 @@ def build_sample_memory_messages() -> list:
 
 def evaluate_memory_case(case: dict) -> dict:
     messages = build_sample_memory_messages()
-    trim_messages(messages, max_messages=case["max_messages"])
+    trim_messages(
+        messages,
+        max_messages=case["max_messages"],
+        max_recent_turns=case["max_recent_turns"]
+    )
 
     actual_roles = [
         message["role"]
@@ -159,14 +163,29 @@ def evaluate_memory_case(case: dict) -> dict:
         for message in messages
         if message["role"] == "user"
     ]
+    summary_messages = [
+        message["content"]
+        for message in messages
+        if (
+            message["role"] == "system"
+            and message.get("content", "").startswith(SUMMARY_PREFIX)
+        )
+    ]
+    actual_summary_contains = [
+        expected_text
+        for expected_text in case["expected_summary_contains"]
+        if any(expected_text in summary for summary in summary_messages)
+    ]
 
     actual = {
         "roles": actual_roles,
-        "user_messages": actual_user_messages
+        "user_messages": actual_user_messages,
+        "summary_contains": actual_summary_contains
     }
     expected = {
         "roles": case["expected_roles"],
-        "user_messages": case["expected_user_messages"]
+        "user_messages": case["expected_user_messages"],
+        "summary_contains": case["expected_summary_contains"]
     }
 
     return {

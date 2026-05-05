@@ -103,7 +103,7 @@ data_store.py  Data Provider，目前从 JSON 读取业务数据
 debug.py     messages 和 tool trace 打印
 executor.py  工具执行器，负责执行 tool_call 和错误包装
 llm.py       OpenAI 普通模型调用和流式模型调用
-memory.py    短期上下文裁剪，保留 system 和最近几轮完整对话
+memory.py    上下文压缩，保留 system、summary 和最近几轮完整对话
 rag.py       chunk、关键词检索、embedding、vector index
 router.py    根据权限、页面场景和意图筛选候选工具
 session_store.py  HTTP 会话存储和同 session 锁，用 session_id 保存多轮 messages
@@ -156,6 +156,8 @@ export OPENAI_MODEL="gpt-5-mini"
 export OPENAI_EMBEDDING_MODEL="text-embedding-3-small"
 export MIN_SEMANTIC_SIMILARITY="0.2"
 export MAX_CONTEXT_MESSAGES="24"
+export MAX_RECENT_TURNS="4"
+export MAX_SUMMARY_CHARS="600"
 ```
 
 ## 运行
@@ -540,12 +542,12 @@ HTTP API 支持 `session_id` 后，同一个用户的 `messages` 会不断变长
 很早以前的历史可能干扰当前问题
 ```
 
-所以当前项目加了一个教学版短期 memory：
+所以当前项目加了一个教学版 summary memory：
 
 ```text
 保留 system message
-按完整对话轮次裁剪历史
-优先保留最近几轮
+旧历史压缩成一条“对话摘要”
+优先保留最近几轮完整原文
 默认最多保留 MAX_CONTEXT_MESSAGES = 24 条 message
 ```
 
@@ -559,7 +561,7 @@ assistant tool_calls
 
 如果只保留其中一半，模型会看到不完整的工具调用历史，可能导致 API 报错或回答混乱。
 
-所以 `memory.py` 会按“用户一轮问题 + 后续 assistant/tool 消息”作为一个整体来保留或丢弃。
+所以 `memory.py` 会按“用户一轮问题 + 后续 assistant/tool 消息”作为一个整体来处理。超过上限时，较早的完整 turn 会被合并进 summary，最近的 turn 继续保留原文。
 
 ## 工具执行结果
 
@@ -832,8 +834,9 @@ app.py 提供 /chat/stream SSE 接口
 当前解法：
 
 ```text
-memory.py 在调用模型前后裁剪 messages
-保留 system message 和最近几轮完整对话
+memory.py 在调用模型前后压缩 messages
+旧历史合并成“对话摘要”
+最近 MAX_RECENT_TURNS 轮保留完整原文
 MAX_CONTEXT_MESSAGES 控制最大 message 数量
 ```
 

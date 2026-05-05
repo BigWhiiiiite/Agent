@@ -13,4 +13,6 @@ TRACE_LOG_PATH = BASE_DIR / "logs" / "agent_trace.jsonl"
 TOP_K = 3
 MAX_AGENT_STEPS = 6
 MAX_CONTEXT_MESSAGES = int(os.getenv("MAX_CONTEXT_MESSAGES", "24"))
+MAX_RECENT_TURNS = int(os.getenv("MAX_RECENT_TURNS", "4"))
+MAX_SUMMARY_CHARS = int(os.getenv("MAX_SUMMARY_CHARS", "600"))
 MIN_SEMANTIC_SIMILARITY = float(os.getenv("MIN_SEMANTIC_SIMILARITY", "0.2"))
