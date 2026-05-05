@@ -1,9 +1,11 @@
 import json
 
 from fastapi import FastAPI
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from agent.config import BASE_DIR
 from agent.router import DEFAULT_CONTEXT
 from agent.core import run_agent, run_agent_stream
 from agent.session_store import (
@@ -13,7 +15,9 @@ from agent.session_store import (
 )
 
 
+STATIC_DIR = BASE_DIR / "static"
 app = FastAPI(title="Minimal Agent API")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 class ChatRequest(BaseModel):
@@ -68,6 +72,11 @@ def health_check() -> dict:
     return {
         "status": "ok"
     }
+
+
+@app.get("/")
+def index() -> FileResponse:
+    return FileResponse(STATIC_DIR / "index.html")
 
 
 @app.post("/chat")

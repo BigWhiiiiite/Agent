@@ -28,6 +28,7 @@
 - Agent Trace 审计日志
 - FastAPI 多轮 HTTP 接口
 - SSE 流式聊天接口
+- 内置简易聊天前端
 - 同 session 并发请求保护
 - 短期 memory 裁剪，防止 messages 无限增长
 - Data Provider 抽象，便于替换真实数据源
@@ -57,6 +58,10 @@
 ├── requirements.txt
 ├── scripts/
 │   └── run_eval.py
+├── static/
+│   ├── app.js
+│   ├── index.html
+│   └── styles.css
 ├── data/
 │   ├── courses.json
 │   └── teacher_schedule.json
@@ -69,6 +74,8 @@
 `main.py` 是命令行入口。
 
 `app.py` 是 FastAPI HTTP 服务入口。
+
+`static/` 是简易聊天前端，直接调用当前 FastAPI 接口。
 
 `eval_cases.json` 是评估用例。
 
@@ -154,6 +161,12 @@ python3 main.py
 
 ```bash
 uvicorn app:app --reload
+```
+
+浏览器打开：
+
+```text
+http://127.0.0.1:8000/
 ```
 
 健康检查：
@@ -762,6 +775,7 @@ data_store.py 提供 Data Provider 抽象
 
 ```text
 app.py 提供 FastAPI HTTP 接口
+static/ 提供简易聊天前端
 GET /health 用于健康检查
 POST /chat 用于外部系统或前端调用 Agent
 POST /chat/stream 用于前端流式显示 Agent 回答

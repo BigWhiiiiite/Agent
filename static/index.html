@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Minimal Agent</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <span></span>
+          </div>
+          <div>
+            <h1>Minimal Agent</h1>
+            <p>Campus assistant</p>
+          </div>
+        </div>
+
+        <form class="settings" id="settings-form">
+          <label>
+            <span>Session</span>
+            <input id="session-id" name="session_id" value="demo-user-1" autocomplete="off">
+          </label>
+
+          <label>
+            <span>Role</span>
+            <select id="user-role" name="user_role">
+              <option value="student">student</option>
+              <option value="teacher">teacher</option>
+              <option value="admin">admin</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Page</span>
+            <select id="page-context" name="page">
+              <option value="general">general</option>
+              <option value="course">course</option>
+              <option value="teacher">teacher</option>
+              <option value="knowledge_base">knowledge_base</option>
+            </select>
+          </label>
+        </form>
+
+        <div class="quick-prompts" aria-label="示例问题">
+          <button type="button" data-prompt="帮我看看李老师周五什么时候有空">李老师周五时间</button>
+          <button type="button" data-prompt="请假制度是什么？">请假制度</button>
+          <button type="button" data-prompt="Agent开发入门这门课在哪里上？">课程教室</button>
+          <button type="button" data-prompt="RAG为什么要切块？">RAG 切块</button>
+        </div>
+
+        <button class="secondary-action" id="reset-session" type="button" title="Reset session">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+            <path d="M3 4v5h5"></path>
+          </svg>
+          <span>Reset</span>
+        </button>
+      </aside>
+
+      <main class="chat-panel">
+        <header class="chat-header">
+          <div>
+            <p class="eyebrow">Agent Console</p>
+            <h2>校园助手</h2>
+          </div>
+          <div class="status-pill" id="status-pill">
+            <span></span>
+            Ready
+          </div>
+        </header>
+
+        <section class="messages" id="messages" aria-live="polite">
+          <article class="message assistant">
+            <div class="avatar">A</div>
+            <div class="bubble">
+              你好，我可以查询老师时间、课程信息，也可以回答知识库里的制度和 Agent 学习问题。
+            </div>
+          </article>
+        </section>
+
+        <form class="composer" id="chat-form">
+          <textarea
+            id="message-input"
+            rows="2"
+            placeholder="输入问题"
+            autocomplete="off"
+          ></textarea>
+          <button class="send-button" id="send-button" type="submit" title="Send">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m22 2-7 20-4-9-9-4Z"></path>
+              <path d="M22 2 11 13"></path>
+            </svg>
+          </button>
+        </form>
+      </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
